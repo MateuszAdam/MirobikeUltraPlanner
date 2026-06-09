@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MiroBike Ultra Planner</title>
+<meta name="theme-color" content="#14161b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MiroBike">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="leaflet/leaflet.css">
+<script src="leaflet/leaflet.js"></script>
+<script src="data.js"></script>
+<style>
+  :root{
+    --ink:#14161b; --ink2:#1c1f27; --line:#2b303b; --txt:#e9ecf1; --dim:#9aa3b2;
+    --food:#3ec98a; --sleep:#7c8cff; --fuel:#f5a623; --eat:#ff6b6b;
+    --route:#19e0d6; --here:#ffd23f; --warn:#ff5a5a; --fav:#ffd23f;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);color:var(--txt);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{display:grid;grid-template-rows:auto auto 1fr;height:100vh;overflow:hidden}
+
+  header{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line)}
+  header img.logo{width:30px;height:30px;border-radius:8px;display:block}
+  header .word b{font-size:15px;letter-spacing:.02em;font-weight:800}
+  header .word span{font-size:11px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
+  header .name{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)}
+
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--ink2)}
+  .bar label.btn,.bar button,.bar select,.bar input[type=number]{
+    font-family:var(--sans);font-size:12px;color:var(--txt);background:#232732;border:1px solid var(--line);
+    border-radius:8px;padding:7px 11px;cursor:pointer}
+  .bar button.go{background:var(--route);color:#04201e;border-color:transparent;font-weight:700}
+  .bar button.gps.on{background:var(--here);color:#3a2e00;border-color:transparent;font-weight:700}
+  .bar button:disabled{opacity:.45;cursor:default}
+  .bar .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+  .bar .grp{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+  .cat{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none}
+  .cat .dot{width:9px;height:9px;border-radius:50%}
+  .cat.off{opacity:.35}
+  .chip{font-size:11px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none}
+  .chip.on{background:var(--fav);color:#3a2e00;border-color:transparent;font-weight:700}
+  #file,#jsonfile{display:none}
+  .status{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto;max-width:42ch;text-align:right}
+
+  main{display:grid;grid-template-columns:1fr 384px;min-height:0}
+  #map{height:100%;background:#0c0d10}
+  .leaflet-container{background:#0c0d10}
+  body.mapoff main{grid-template-columns:1fr}
+  body.mapoff #map{display:none}
+  body.mapoff aside{border-left:0}
+
+  .leaflet-popup-content-wrapper{background:var(--ink2);color:var(--txt);border:1px solid var(--line);border-radius:10px}
+  .leaflet-popup-tip{background:var(--ink2)}
+  .leaflet-popup-content{margin:11px 13px;font-family:var(--sans)}
+  .pop .pn{font-size:14px;font-weight:700;margin-bottom:3px}
+  .pop .pc{font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+  .pop .pr{font-family:var(--mono);font-size:12px;color:var(--dim);margin:2px 0}
+  .pop a{color:var(--route)}
+  .pop .favbtn{margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#232732;color:var(--txt);cursor:pointer}
+  .pop .favbtn.is{background:var(--fav);color:#3a2e00;border-color:transparent;font-weight:700}
+
+  aside{border-left:1px solid var(--line);overflow:auto;background:var(--ink)}
+  .here{padding:16px;border-bottom:1px solid var(--line)}
+  .here .lab{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .here .km{font-family:var(--mono);font-size:46px;font-weight:700;line-height:1;letter-spacing:-.02em}
+  .here .km small{font-size:16px;color:var(--dim);font-weight:400}
+  .here .meta{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:6px}
+  .empty{padding:28px 18px;color:var(--dim);font-size:13px;line-height:1.5}
+
+  .warn{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.45}
+  .warn.food{background:#2a1416;color:#ffc9c9}
+  .warn.fav{background:#2a2410;color:#ffe9a8}
+  .warn b{color:#fff}
+
+  .nextrow{display:flex;border-bottom:1px solid var(--line)}
+  .nextrow .cell{flex:1;padding:10px 6px;text-align:center;border-right:1px solid var(--line)}
+  .nextrow .cell:last-child{border-right:0}
+  .nextrow .cl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+  .nextrow .cv{font-family:var(--mono);font-size:18px;font-weight:700;margin-top:3px}
+  .nextrow .cn{font-size:10px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .listhdr{padding:10px 16px 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between}
+  ul.roadbook{list-style:none;margin:0;padding:0 8px 28px}
+  ul.roadbook li{display:grid;grid-template-columns:62px 12px 1fr 22px;align-items:center;gap:9px;padding:9px 8px;border-bottom:1px solid #20242e;cursor:pointer;border-radius:8px}
+  ul.roadbook li:hover{background:#1b1f28}
+  ul.roadbook li.sel{background:#222a39;outline:1px solid var(--route)}
+  ul.roadbook li .d{font-family:var(--mono);font-size:16px;font-weight:700;text-align:right}
+  ul.roadbook li .d small{font-size:10px;color:var(--dim);font-weight:400;display:block;margin-top:1px}
+  ul.roadbook li .tick{width:9px;height:9px;border-radius:50%;justify-self:center}
+  ul.roadbook li .info .nm{font-size:13px;font-weight:600}
+  ul.roadbook li .info .det{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
+  ul.roadbook li .info .oh{color:var(--food)}
+  ul.roadbook li .star{font-size:16px;text-align:center;color:#41464f}
+  ul.roadbook li .star.is{color:var(--fav)}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="logo.svg" alt="">
+  <div class="word"><b>MiroBike</b><span>Ultra Planner</span></div>
+  <span class="name" id="trackname">— brak trasy —</span>
+</header>
+
+<div class="bar">
+  <label class="btn" for="file">Wczytaj trasę (.gpx)</label>
+  <input id="file" type="file" accept=".gpx">
+
+  <span class="sep"></span>
+
+  <span class="grp">od trasy
+    <select id="radius">
+      <option value="100">100 m</option>
+      <option value="500">500 m</option>
+      <option value="1000">1 km</option>
+      <option value="2000" selected>2 km</option>
+      <option value="3000">3 km</option>
+      <option value="5000">5 km</option>
+    </select>
+  </span>
+
+  <span class="cat" data-cat="food"><span class="dot" style="background:var(--food)"></span>spożywcze</span>
+  <span class="cat" data-cat="sleep"><span class="dot" style="background:var(--sleep)"></span>noclegi</span>
+  <span class="cat" data-cat="fuel"><span class="dot" style="background:var(--fuel)"></span>paliwo</span>
+  <span class="cat" data-cat="eat"><span class="dot" style="background:var(--eat)"></span>jedzenie</span>
+  <span class="chip" id="favchip">★ tylko ulubione</span>
+
+  <span class="grp">zasięg listy
+    <select id="range">
+      <option value="50">50 km</option>
+      <option value="100" selected>100 km</option>
+      <option value="200">200 km</option>
+    </select>
+  </span>
+
+  <span class="sep"></span>
+
+  <button id="fetch" class="go" disabled>Pobierz punkty</button>
+  <button id="gps" class="gps" disabled>Śledź GPS</button>
+  <button id="mapToggle">Zwiń mapę</button>
+
+  <span class="sep"></span>
+  <label class="btn" for="jsonfile">Wczytaj punkty</label>
+  <input id="jsonfile" type="file" accept=".json">
+  <button id="export" disabled>Eksportuj punkty</button>
+
+  <span class="sep"></span>
+  <span class="grp">offline
+    <select id="saved" title="trasy zapisane na urządzeniu"></select>
+  </span>
+  <button id="del" title="usuń bieżącą trasę z pamięci offline">Usuń</button>
+
+  <span class="status" id="status">Ładuję trasę…</span>
+</div>
+
+<main>
+  <div id="map"></div>
+  <aside id="panel">
+    <div class="empty">Kliknij na mapie (symulacja pozycji) albo włącz <b>Śledź GPS</b>. Pokażę, co masz przed sobą i za ile kilometrów.</div>
+  </aside>
+</main>
+
+<script>
+const CATS = {
+  food:  {label:"Spożywcze", color:css('--food'),
+          match:t=>["supermarket","convenience","grocery","greengrocer","bakery","general","deli","butcher","farm"].includes(t.shop)},
+  sleep: {label:"Nocleg", color:css('--sleep'),
+          match:t=>["hotel","guest_house","hostel","motel","apartment","chalet","camp_site","caravan_site","alpine_hut","wilderness_hut"].includes(t.tourism)},
+  fuel:  {label:"Paliwo", color:css('--fuel'), match:t=>t.amenity==="fuel"},
+  eat:   {label:"Jedzenie", color:css('--eat'),
+          match:t=>["restaurant","cafe","fast_food","bar","pub","food_court","ice_cream"].includes(t.amenity)},
+};
+const ORDER=["food","fuel","eat","sleep"];
+const OVERPASS=[
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
+const FAV_THRESHOLDS=[50,20,10,5,2];
+
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function R(){return parseInt(document.getElementById('radius').value,10);}
+function rangeM(){return parseInt(document.getElementById('range').value,10)*1000;}
+const active=new Set(["food","sleep","fuel","eat"]);
+let favOnly=false;
+
+let map, routeLine, hereMarker, hereAcc, poiLayer;
+let route=null, routeDS=null;
+let pois=[], pidIndex=new Map(), foodGaps=[];
+let favorites=new Set(), favAlerted=new Map();
+let lastKm=null, lastOff=0, selPid=null;
+
+function hav(aLat,aLon,bLat,bLon){
+  const Rk=6371000,t=Math.PI/180;
+  const p1=aLat*t,p2=bLat*t,dp=(bLat-aLat)*t,dl=(bLon-aLon)*t;
+  const a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2*Rk*Math.asin(Math.sqrt(a));
+}
+function pid(p){return p.lat.toFixed(5)+","+p.lon.toFixed(5);}
+
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:false}).setView([50.81,15.0],9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,opacity:.55}).addTo(map);
+  poiLayer=L.layerGroup().addTo(map);
+  map.on('click',e=>setHere(e.latlng.lat,e.latlng.lng,false));
+}
+
+function parseGPX(text){
+  const re=/lat="([-\d.]+)"\s+lon="([-\d.]+)"/g; let m,pts=[];
+  while((m=re.exec(text))) pts.push({lat:+m[1],lon:+m[2]});
+  if(pts.length<2) throw new Error("Za mało punktów w GPX.");
+  const cum=[0];
+  for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
+  return {pts,cum,totalM:cum[cum.length-1],isLoop:hav(pts[0].lat,pts[0].lon,pts.at(-1).lat,pts.at(-1).lon)<200};
+}
+function downsample(r,stepM){
+  const lat=[r.pts[0].lat],lon=[r.pts[0].lon],cum=[0];let acc=0;
+  for(let i=1;i<r.pts.length;i++){
+    acc+=hav(r.pts[i-1].lat,r.pts[i-1].lon,r.pts[i].lat,r.pts[i].lon);
+    if(acc>=stepM){lat.push(r.pts[i].lat);lon.push(r.pts[i].lon);cum.push(r.cum[i]);acc=0;}
+  }
+  lat.push(r.pts.at(-1).lat);lon.push(r.pts.at(-1).lon);cum.push(r.totalM);
+  return {lat,lon,cum};
+}
+function project(plat,plon,winKm){
+  const d=routeDS; let best=Infinity,bk=0,bside="";
+  const kx=Math.cos(plat*Math.PI/180)*111320, ky=110540;
+  const px=plon*kx, py=plat*ky;
+  for(let i=0;i<d.lat.length-1;i++){
+    if(winKm!=null && lastKm!=null){
+      const c0=d.cum[i]/1000,c1=d.cum[i+1]/1000;
+      if(Math.abs(c0-lastKm)>winKm && Math.abs(c1-lastKm)>winKm) continue;
+    }
+    const ax=d.lon[i]*kx, ay=d.lat[i]*ky, bx=d.lon[i+1]*kx, by=d.lat[i+1]*ky;
+    const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+    let t=L2>0?((px-ax)*dx+(py-ay)*dy)/L2:0; t=Math.max(0,Math.min(1,t));
+    const fx=ax+t*dx, fy=ay+t*dy, dist=Math.hypot(px-fx,py-fy);
+    if(dist<best){best=dist;bk=d.cum[i]+t*(d.cum[i+1]-d.cum[i]);bside=(dx*(py-ay)-dy*(px-ax))>0?"L":"P";}
+  }
+  if(winKm!=null && (best===Infinity || best>3000)) return project(plat,plon,null);
+  return {km:bk/1000, detourM:Math.round(best), side:bside};
+}
+
+// ---- ładowanie trasy ----
+document.getElementById('file').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{loadRoute(parseGPX(rd.result),f.name);}catch(e){setStatus("Błąd GPX: "+e.message);}};
+  rd.readAsText(f);
+});
+function loadRoute(r,name){
+  route=r; routeDS=downsample(r,150); lastKm=null; selPid=null;
+  document.getElementById('trackname').textContent=name+" · "+(r.totalM/1000).toFixed(1)+" km"+(r.isLoop?" · pętla":"");
+  drawRoute();
+  pois=[];pidIndex.clear();foodGaps=[];renderPOIs();document.getElementById('panel').innerHTML='';
+  loadFavs(name);
+  document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
+  setStatus("Trasa wczytana. Wybierz odległość i pobierz punkty.");
+  persistBundle();
+}
+function drawRoute(){
+  if(routeLine) routeLine.remove();
+  routeLine=L.polyline(route.pts.map(p=>[p.lat,p.lon]),{color:css('--route'),weight:3,opacity:.9}).addTo(map);
+  if(!document.body.classList.contains('mapoff')) map.fitBounds(routeLine.getBounds(),{padding:[30,30]});
+}
+
+// ---- ładowanie punktów (bundle: plik lub wbudowany) ----
+document.getElementById('jsonfile').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{loadBundle(JSON.parse(rd.result));}catch(e){setStatus("Błąd JSON: "+e.message);}};
+  rd.readAsText(f);
+});
+function loadBundle(b, skipPersist){
+  route={pts:b.route.map(a=>({lat:a[0],lon:a[1]})),cum:b.route.map(a=>a[2]*1000),totalM:b.total_km*1000,isLoop:b.is_loop};
+  routeDS=downsample(route,150); lastKm=null; selPid=null;
+  drawRoute();
+  const nm=b.name||"trasa";
+  document.getElementById('trackname').textContent=nm+" · "+b.total_km.toFixed(1)+" km"+(b.is_loop?" · pętla":"");
+  pois=b.pois.map(p=>({name:p.name,cats:p.cats,lat:p.lat,lon:p.lon,km:p.route_km,detourM:p.detour_m,side:p.side,
+    tags:{opening_hours:p.opening_hours||"","addr:city":p.city||"",phone:p.phone||"",website:p.website||""}}));
+  indexPois(); computeGaps(); loadFavs(nm); renderPOIs();
+  document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
+  document.getElementById('export').disabled=false;
+  setStatus(pois.length+" punktów wczytanych. Kliknij na mapie lub włącz GPS.");
+  if(!skipPersist) persistBundle(b);
+}
+function indexPois(){pidIndex.clear();for(const p of pois) pidIndex.set(pid(p),p);}
+
+// ---- Overpass (resumowalny) ----
+document.getElementById('fetch').addEventListener('click',fetchPOIs);
+let fetchState=null;
+async function fetchPOIs(){
+  if(!route) return;
+  if(!active.size){setStatus("Włącz przynajmniej jedną kategorię.");return;}
+  const btn=document.getElementById('fetch'); btn.disabled=true;
+  const r=R(); const filters=[];
+  if(active.has("food"))  filters.push('nw["shop"~"^(supermarket|convenience|grocery|greengrocer|bakery|general|deli|butcher|farm)$"]');
+  if(active.has("sleep")) filters.push('nw["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]');
+  if(active.has("fuel"))  filters.push('nw["amenity"~"^(fuel)$"]');
+  if(active.has("eat"))   filters.push('nw["amenity"~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream)$"]');
+  const key=r+"|"+[...active].sort().join(",");
+  if(!fetchState||fetchState.key!==key){
+    const q=downsample(route,1500);const c=[];for(let i=0;i<q.lat.length;i++)c.push(q.lat[i]+","+q.lon[i]);
+    const batches=[];for(let i=0;i<c.length;i+=25)batches.push(c.slice(i,i+25));
+    fetchState={batches,done:new Set(),seen:new Map(),r,key,filters};
+  }
+  const S=fetchState;
+  for(const i of S.batches.map((_,i)=>i).filter(i=>!S.done.has(i))){
+    setStatus(`Pobieram… ${S.done.size+1}/${S.batches.length} · ${S.seen.size} POI`);
+    const chain=S.batches[i].join(",");
+    const body=S.filters.map(f=>`  ${f}(around:${S.r},${chain});`).join("\n");
+    const q=`[out:json][timeout:90];\n(\n${body}\n);\nout center tags;`;
+    try{
+      const data=await overpass(q);
+      for(const el of data.elements){
+        const k=el.type+el.id; if(S.seen.has(k)) continue;
+        const lat=el.lat??el.center?.lat, lon=el.lon??el.center?.lon; if(lat==null||lon==null) continue;
+        const t=el.tags||{}; const cs=[]; for(const ck in CATS) if(CATS[ck].match(t)) cs.push(ck);
+        if(!cs.length) continue;
+        S.seen.set(k,{name:t.name||CATS[cs[0]].label,cats:cs,lat,lon,tags:t});
+      }
+      S.done.add(i); rawDots(S.seen);
+    }catch(e){}
+    await sleep(350+Math.random()*400);
+  }
+  finalize(S.seen); btn.disabled=false;
+  const left=S.batches.length-S.done.size;
+  if(left>0){btn.textContent="Dobierz resztę ("+left+")";setStatus(`Mam ${pois.length} POI. ${left} paczek padło — kliknij „Dobierz resztę".`);}
+  else{btn.textContent="Pobierz punkty";setStatus(pois.length+" POI gotowych. Kliknij na mapie lub włącz GPS.");}
+}
+function finalize(seen){
+  pois=[];
+  for(const p of seen.values()){const pr=project(p.lat,p.lon,null);pois.push({...p,km:pr.km,detourM:pr.detourM,side:pr.side});}
+  pois.sort((a,b)=>a.km-b.km); indexPois(); computeGaps(); renderPOIs();
+  document.getElementById('export').disabled=pois.length===0;
+  if(pois.length) persistBundle();
+  if(lastKm!=null) renderPanel();
+}
+function rawDots(seen){poiLayer.clearLayers();for(const p of seen.values()){const c=CATS[p.cats[0]].color;L.circleMarker([p.lat,p.lon],{radius:3,color:c,weight:1,fillColor:c,fillOpacity:.8}).addTo(poiLayer);}}
+async function overpass(q,attempts=4){
+  let last="";
+  for(let a=0;a<attempts;a++){
+    const url=OVERPASS[a%OVERPASS.length]; const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),95000);
+    try{
+      const res=await fetch(url,{method:"POST",signal:ctrl.signal,body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"}});
+      clearTimeout(to);
+      if(res.ok) return await res.json();
+      last="HTTP "+res.status; if(![429,500,502,503,504].includes(res.status)) break;
+    }catch(e){clearTimeout(to);last=(e.name==="AbortError")?"timeout":e.message;}
+    await sleep(1500*(a+1)+Math.random()*800);
+  }
+  throw new Error(last||"brak odpowiedzi");
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function computeGaps(){
+  const food=pois.filter(p=>p.cats.includes("food")).sort((a,b)=>a.km-b.km); foodGaps=[];
+  for(let i=0;i<food.length-1;i++){const g=food[i+1].km-food[i].km;if(g>=20)foodGaps.push({fromKm:food[i].km,toKm:food[i+1].km,gapKm:g,last:food[i],first:food[i+1]});}
+}
+
+// ---- ulubione ----
+function loadFavs(name){favorites=new Set();favAlerted=new Map();try{const raw=localStorage.getItem("mb_fav:"+name);if(raw)favorites=new Set(JSON.parse(raw));}catch(e){}}
+function saveFavs(){try{const name=document.getElementById('trackname').textContent.split(" · ")[0];localStorage.setItem("mb_fav:"+name,JSON.stringify([...favorites]));}catch(e){}}
+window.toggleFav=function(id){
+  if(favorites.has(id)){favorites.delete(id);favAlerted.delete(id);}
+  else{favorites.add(id);if("Notification"in window&&Notification.permission==="default"){try{Notification.requestPermission();}catch(e){}}}
+  saveFavs(); renderPOIs(); if(lastKm!=null) renderPanel();
+  const p=pidIndex.get(id); if(p&&p._m) p._m.setPopupContent(popupHtml(p));
+};
+
+// ---- render POI ----
+function visible(p){ if(!p.cats.some(c=>active.has(c))) return false; if(favOnly&&!favorites.has(pid(p))) return false; return true; }
+function renderPOIs(){
+  poiLayer.clearLayers();
+  for(const p of pois){
+    if(!visible(p)) continue;
+    const id=pid(p), isFav=favorites.has(id), c=CATS[p.cats[0]].color;
+    const m=L.circleMarker([p.lat,p.lon],{radius:isFav?6:4,color:isFav?css('--fav'):c,weight:isFav?2:1,fillColor:c,fillOpacity:.9}).addTo(poiLayer);
+    m.bindPopup(popupHtml(p),{closeButton:true});
+    m.on('click',()=>{selPid=id;highlightList();});
+    p._m=m;
+    if(id===selPid) m.setStyle({radius:8,weight:3,color:css('--route')});
+  }
+}
+function popupHtml(p){
+  const id=pid(p), t=p.tags||{}, cats=p.cats.map(c=>CATS[c].label).join(" · "), col=CATS[p.cats[0]].color;
+  let rows=`<div class="pr">km ${p.km.toFixed(1)} · ${p.detourM} m od trasy ${p.side||""}</div>`;
+  if(t.opening_hours) rows+=`<div class="pr">🕒 ${esc(t.opening_hours)}</div>`;
+  const addr=[t["addr:street"],t["addr:housenumber"]].filter(Boolean).join(" ")+(t["addr:city"]?", "+t["addr:city"]:"");
+  if(addr.trim()) rows+=`<div class="pr">${esc(addr)}</div>`;
+  const ph=t.phone||t["contact:phone"]; if(ph) rows+=`<div class="pr">☎ <a href="tel:${esc(ph)}">${esc(ph)}</a></div>`;
+  const web=t.website||t["contact:website"]; if(web) rows+=`<div class="pr"><a href="${esc(web)}" target="_blank" rel="noopener">strona ↗</a></div>`;
+  const isFav=favorites.has(id);
+  return `<div class="pop"><div class="pn">${esc(p.name)}</div><div class="pc" style="color:${col}">${cats}</div>${rows}`+
+         `<button class="favbtn ${isFav?'is':''}" onclick="toggleFav('${id}')">${isFav?'★ w ulubionych':'☆ do ulubionych'}</button></div>`;
+}
+window.selectFromList=function(id){
+  const p=pidIndex.get(id); if(!p) return;
+  selPid=id;
+  if(!document.body.classList.contains('mapoff')){ map.setView([p.lat,p.lon],Math.max(map.getZoom(),15)); }
+  renderPOIs(); if(p._m && !document.body.classList.contains('mapoff')) p._m.openPopup();
+  highlightList();
+};
+function highlightList(){
+  document.querySelectorAll('ul.roadbook li').forEach(li=>li.classList.toggle('sel',li.dataset.id===selPid));
+  const el=document.getElementById('li_'+cssEsc(selPid)); if(el) el.scrollIntoView({block:'nearest'});
+}
+
+// ---- pozycja + panel ----
+function setHere(lat,lon,fromGPS){
+  if(!route){setStatus("Najpierw wczytaj trasę.");return;}
+  const pr=project(lat,lon, fromGPS?5:null);
+  lastKm=pr.km; lastOff=pr.detourM;
+  if(hereMarker) hereMarker.remove();
+  hereMarker=L.circleMarker([lat,lon],{radius:8,color:css('--here'),weight:3,fillColor:css('--here'),fillOpacity:.55}).addTo(map);
+  renderPanel(); if(fromGPS) checkFavAlerts();
+}
+function aheadDelta(km,cur){let d=km-cur;if(d<-0.05&&route.isLoop)d+=route.totalM/1000;return d;}
+
+function renderPanel(){
+  const cur=lastKm, total=route.totalM/1000, rg=rangeM()/1000;
+  const panel=document.getElementById('panel');
+  const offNote=lastOff>250?`<span style="color:var(--warn)"> · ${lastOff} m od trasy (poza?)</span>`:` · ${lastOff} m od trasy`;
+  const up=pois.filter(visible).map(p=>({p,delta:aheadDelta(p.km,cur)})).filter(x=>x.delta>0.02&&x.delta<=rg).sort((a,b)=>a.delta-b.delta);
+
+  const nextOf={};
+  for(const c of ORDER){ if(!active.has(c)){nextOf[c]=null;continue;}
+    nextOf[c]=pois.filter(p=>p.cats.includes(c)&&(!favOnly||favorites.has(pid(p)))).map(p=>({p,delta:aheadDelta(p.km,cur)})).filter(x=>x.delta>0.02).sort((a,b)=>a.delta-b.delta)[0]||null;}
+
+  let warn="";
+  const nf=pois.filter(p=>p.cats.includes("food")).map(p=>({p,delta:aheadDelta(p.km,cur)})).filter(x=>x.delta>0.02).sort((a,b)=>a.delta-b.delta)[0];
+  if(active.has("food")&&pois.some(p=>p.cats.includes("food"))){
+    if(nf&&nf.delta>20) warn+=`<div class="warn food">⚠️ Następny sklep dopiero <b>za ${nf.delta.toFixed(1)} km</b> (${esc(nf.p.name)}). Zatankuj zapasy wcześniej.</div>`;
+    else{const g=foodGaps.find(g=>g.fromKm>cur-0.5&&(g.fromKm-cur)<=rg&&(g.fromKm-cur)<10);
+      if(g) warn+=`<div class="warn food">⚠️ Za <b>${(g.fromKm-cur).toFixed(1)} km</b> ostatni sklep (${esc(g.last.name)}) przed odcinkiem <b>${g.gapKm.toFixed(0)} km bez zaopatrzenia</b>.</div>`;}
+  }
+  const favAhead=pois.filter(p=>favorites.has(pid(p))).map(p=>({p,delta:aheadDelta(p.km,cur)})).filter(x=>x.delta>0.02).sort((a,b)=>a.delta-b.delta)[0];
+  if(favAhead) warn+=`<div class="warn fav">★ Do ulubionego: <b>${esc(favAhead.p.name)}</b> za <b>${favAhead.delta.toFixed(1)} km</b> (${CATS[favAhead.p.cats[0]].label.toLowerCase()}).</div>`;
+
+  let html=`<div class="here"><div class="lab">jesteś na</div>
+    <div class="km">${cur.toFixed(1)}<small> / ${total.toFixed(0)} km</small></div>
+    <div class="meta">${(total-cur).toFixed(1)} km do końca${offNote}</div></div>${warn}
+    <div class="nextrow">${ORDER.filter(c=>active.has(c)).map(c=>{const n=nextOf[c];
+      return `<div class="cell"><div class="cl" style="color:${CATS[c].color}">${CATS[c].label}</div>
+        <div class="cv">${n?("+"+n.delta.toFixed(1)):"—"}</div><div class="cn">${n?esc(n.p.name):"brak"}</div></div>`;}).join("")}</div>
+    <div class="listhdr"><span>przed Tobą (do ${rg.toFixed(0)} km)</span><span>${up.length}</span></div>`;
+
+  if(!pois.length) html+=`<div class="empty" style="padding:18px">Brak punktów.</div>`;
+  else if(!up.length) html+=`<div class="empty" style="padding:18px">Nic w zasięgu ${rg.toFixed(0)} km dla wybranych filtrów. Zwiększ zasięg lub odległość.</div>`;
+  else html+=`<ul class="roadbook">`+up.slice(0,120).map(({p,delta})=>{
+      const id=pid(p),c=CATS[p.cats[0]],isFav=favorites.has(id);
+      const oh=p.tags?.opening_hours?`<span class="oh">${esc(p.tags.opening_hours)}</span> · `:"";
+      return `<li data-id="${id}" id="li_${id}" class="${id===selPid?'sel':''}" onclick="selectFromList('${id}')">
+        <div class="d">+${delta.toFixed(1)}<small>km ${p.km.toFixed(1)}</small></div>
+        <div class="tick" style="background:${c.color}"></div>
+        <div class="info"><div class="nm">${esc(p.name)}</div>
+          <div class="det">${oh}${p.detourM} m ${p.side||""}${p.tags?.["addr:city"]?" · "+esc(p.tags["addr:city"]):""}</div></div>
+        <div class="star ${isFav?'is':''}" onclick="event.stopPropagation();toggleFav('${id}')">${isFav?'★':'☆'}</div>
+      </li>`;}).join("")+`</ul>`;
+  panel.innerHTML=html;
+}
+
+function checkFavAlerts(){
+  if(lastKm==null) return;
+  for(const p of pois){const id=pid(p); if(!favorites.has(id)) continue;
+    const d=aheadDelta(p.km,lastKm); if(d<=0) continue;
+    let set=favAlerted.get(id); if(!set){set=new Set();favAlerted.set(id,set);}
+    for(const th of FAV_THRESHOLDS){ if(d<=th && !set.has(th)){ set.add(th); notify(`★ ${p.name}`,`za ${d.toFixed(1)} km (${CATS[p.cats[0]].label.toLowerCase()})`); break; } }
+    for(const th of FAV_THRESHOLDS) if(d>th+1) set.delete(th);
+  }
+}
+function notify(title,body){ setStatus("🔔 "+title+" — "+body); try{ if("Notification"in window&&Notification.permission==="granted") new Notification(title,{body}); }catch(e){} }
+
+// ---- GPS ----
+let watchId=null, wakeLock=null;
+document.getElementById('gps').addEventListener('click',async()=>{
+  const btn=document.getElementById('gps');
+  if(watchId!=null){ stopGPS(); return; }
+  if(!("geolocation"in navigator)){setStatus("Brak GPS w tej przeglądarce.");return;}
+  try{ if("Notification"in window&&Notification.permission==="default") Notification.requestPermission(); }catch(e){}
+  watchId=navigator.geolocation.watchPosition(
+    pos=>{ setHere(pos.coords.latitude,pos.coords.longitude,true);
+           if(hereAcc) hereAcc.remove();
+           hereAcc=L.circle([pos.coords.latitude,pos.coords.longitude],{radius:pos.coords.accuracy||30,color:css('--here'),weight:1,fillOpacity:.06}).addTo(map);
+           if(!document.body.classList.contains('mapoff')) map.panTo([pos.coords.latitude,pos.coords.longitude]); },
+    err=>{ setStatus("GPS: "+err.message+" (na telefonie wymaga HTTPS)"); },
+    {enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+  btn.classList.add('on'); btn.textContent="GPS: śledzę — stop";
+  try{ if("wakeLock"in navigator) wakeLock=await navigator.wakeLock.request("screen"); }catch(e){}
+  setStatus("Śledzę GPS… (ekran utrzymany)");
+});
+function stopGPS(){
+  const btn=document.getElementById('gps');
+  if(watchId!=null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  if(hereAcc){hereAcc.remove();hereAcc=null;}
+  if(wakeLock){try{wakeLock.release();}catch(e){}wakeLock=null;}
+  btn.classList.remove('on'); btn.textContent="Śledź GPS";
+  setStatus("GPS zatrzymany. Możesz klikać na mapie.");
+}
+
+// ---- eksport / trwały zapis offline ----
+function buildBundle(){
+  const ds=downsample(route,100);
+  return {
+    name:document.getElementById('trackname').textContent.split(" · ")[0],
+    total_km:+(route.totalM/1000).toFixed(3), is_loop:route.isLoop,
+    route:ds.lat.map((la,i)=>[+la.toFixed(6),+ds.lon[i].toFixed(6),+(ds.cum[i]/1000).toFixed(3)]),
+    pois:pois.map(p=>({name:p.name,cats:p.cats,lat:+p.lat.toFixed(6),lon:+p.lon.toFixed(6),
+      route_km:+p.km.toFixed(3),detour_m:p.detourM,side:p.side,
+      opening_hours:p.tags?.opening_hours||"",city:p.tags?.["addr:city"]||"",
+      phone:p.tags?.phone||p.tags?.["contact:phone"]||"",website:p.tags?.website||p.tags?.["contact:website"]||""})),
+    food_gaps:foodGaps.map(g=>({from_km:+g.fromKm.toFixed(2),to_km:+g.toKm.toFixed(2),gap_km:+g.gapKm.toFixed(2)})),
+  };
+}
+document.getElementById('export').addEventListener('click',()=>{
+  if(!route) return;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(buildBundle(),null,1)],{type:"application/json"}));
+  a.download="bundle.json";a.click();
+});
+
+// zapis na urządzeniu — trasa + punkty są dostępne offline przy kolejnym otwarciu
+function persistBundle(b){
+  if(!route) return;
+  try{
+    b=b||buildBundle();
+    localStorage.setItem("mb_bundle:"+b.name, JSON.stringify(b));
+    localStorage.setItem("mb_last", b.name);
+    refreshSaved();
+  }catch(e){ setStatus("Zapis offline nieudany ("+e.message+") — dane mogą nie przetrwać odświeżenia."); }
+}
+function listSaved(){
+  const out=[];
+  try{ for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k&&k.indexOf("mb_bundle:")===0) out.push(k.slice(10));} }catch(e){}
+  return out.sort();
+}
+function refreshSaved(){
+  const sel=document.getElementById('saved'); if(!sel) return;
+  let cur=""; try{cur=localStorage.getItem("mb_last")||"";}catch(e){}
+  const names=listSaved();
+  sel.innerHTML = names.length
+    ? names.map(n=>`<option ${n===cur?'selected':''} value="${esc(n)}">${esc(n)}</option>`).join("")
+    : `<option value="">— brak —</option>`;
+}
+document.getElementById('saved').addEventListener('change',e=>{
+  const n=e.target.value; if(!n) return;
+  try{ const raw=localStorage.getItem("mb_bundle:"+n);
+    if(raw){ localStorage.setItem("mb_last",n); loadBundle(JSON.parse(raw),true); setStatus("Wczytano offline: "+n); } }
+  catch(err){ setStatus("Błąd wczytania: "+err.message); }
+});
+document.getElementById('del').addEventListener('click',()=>{
+  let cur=""; try{cur=localStorage.getItem("mb_last")||"";}catch(e){}
+  if(!cur){ setStatus("Brak zapisanej trasy do usunięcia."); return; }
+  try{ localStorage.removeItem("mb_bundle:"+cur); localStorage.removeItem("mb_last"); }catch(e){}
+  refreshSaved();
+  setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
+});
+
+// ---- przełączniki ----
+document.querySelectorAll('.cat').forEach(el=>el.addEventListener('click',()=>{
+  const c=el.dataset.cat;
+  if(active.has(c)){active.delete(c);el.classList.add('off');}else{active.add(c);el.classList.remove('off');}
+  renderPOIs(); if(lastKm!=null) renderPanel();
+}));
+document.getElementById('favchip').addEventListener('click',()=>{
+  favOnly=!favOnly; document.getElementById('favchip').classList.toggle('on',favOnly);
+  renderPOIs(); if(lastKm!=null) renderPanel();
+});
+document.getElementById('range').addEventListener('change',()=>{if(lastKm!=null)renderPanel();});
+document.getElementById('mapToggle').addEventListener('click',()=>{
+  const off=document.body.classList.toggle('mapoff');
+  document.getElementById('mapToggle').textContent=off?"Pokaż mapę":"Zwiń mapę";
+  if(!off){ setTimeout(()=>{map.invalidateSize(); if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[30,30]});},60); }
+});
+
+function esc(s){return (s||"").replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function cssEsc(s){return (s||"").replace(/[^a-zA-Z0-9_-]/g,"\\$&");}
+function setStatus(s){document.getElementById('status').textContent=s;}
+
+// ---- start ----
+initMap();
+(function boot(){
+  let lastName=null, raw=null;
+  try{ lastName=localStorage.getItem("mb_last"); if(lastName) raw=localStorage.getItem("mb_bundle:"+lastName); }catch(e){}
+  if(raw){
+    try{ loadBundle(JSON.parse(raw),true); setStatus("Wczytano zapisaną trasę offline: "+lastName); }
+    catch(e){ if(window.BUNDLE) loadBundle(window.BUNDLE); }
+  } else if(window.BUNDLE){
+    try{ loadBundle(window.BUNDLE); }catch(e){ setStatus("Błąd wbudowanych punktów: "+e.message); }
+  } else {
+    setStatus("Wczytaj trasę GPX albo punkty (bundle).");
+  }
+  refreshSaved();
+})();
+
+if("serviceWorker"in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+</script>
+</body>
+</html>
