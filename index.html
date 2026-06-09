@@ -141,7 +141,36 @@
     #help{inset:50% auto auto 50%;transform:translate(-50%,-50%);max-width:520px;border-radius:16px;border:1px solid var(--line)}
   }
 
-  /* ---------- MOBILE ---------- */
+  /* arkusz szczegółów punktu (działa też bez mapy) */
+  #detail{display:none;position:fixed;z-index:1300;inset:auto 0 0 0;background:var(--ink2);border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;padding:16px 18px calc(18px + var(--sab));max-height:82dvh;overflow:auto}
+  body.detail-open #detail{display:block}
+  body.detail-open #scrim{display:block}
+  #detail .dh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
+  #detail .dn{font-size:17px;font-weight:800;line-height:1.2}
+  #detail .dc{font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-top:4px}
+  #detail .dr{font-family:var(--mono);font-size:12.5px;color:var(--dim);margin:4px 0}
+  #detail .acts{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0}
+  #detail .act{flex:1 1 40%;text-align:center;text-decoration:none;background:#232732;border:1px solid var(--line);
+    color:var(--txt);border-radius:10px;padding:12px;font-size:13px;font-weight:600;white-space:nowrap}
+  #detail .favbig{width:100%;padding:13px;border-radius:10px;border:1px solid var(--line);background:#232732;color:var(--txt);font-size:14px;font-weight:700;cursor:pointer}
+  #detail .favbig.is{background:var(--fav);color:#3a2e00;border-color:transparent}
+
+  /* dolny przełącznik widoku (tylko mobile) */
+  #viewbar{display:none}
+
+  @media(min-width:821px){
+    #detail{inset:auto auto 18px 18px;max-width:360px;border-radius:14px;border:1px solid var(--line)}
+  }
+  @media(max-width:820px){
+    header #mapBtn{display:none}                 /* na telefonie używamy dolnego przełącznika */
+    aside{padding-bottom:calc(76px + var(--sab))}
+    #viewbar{display:flex;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + var(--sab));z-index:1250;
+      background:#1c1f27e6;border:1px solid var(--line);border-radius:999px;padding:4px;backdrop-filter:blur(8px);box-shadow:0 6px 20px #0007}
+    #viewbar button{border:none;background:transparent;color:var(--dim);font-size:13px;font-weight:700;padding:10px 22px;border-radius:999px;cursor:pointer}
+    #viewbar button.active{background:var(--route);color:#04201e}
+    #mapClose{bottom:auto}
+  }
   @media(max-width:820px){
     body{grid-template-rows:auto auto auto auto 1fr}
     #hamb{display:inline-flex}
@@ -171,7 +200,7 @@
 <header>
   <button id="hamb" class="iconbtn" aria-label="Opcje">☰</button>
   <img class="logo" src="logo.svg" alt="">
-  <div class="word"><b>MiroBike</b><span>Ultra Planner</span></div>
+  <div class="word"><b>MiroBike</b><span>Twój Ultra Planner</span></div>
   <span class="spacer"></span>
   <span class="name" id="trackname">— brak trasy —</span>
   <button id="mapBtn">Mapa</button>
@@ -203,6 +232,11 @@
   </aside>
 </main>
 
+<div id="viewbar">
+  <button data-v="list" class="active">📋 Lista</button>
+  <button data-v="map">🗺 Mapa</button>
+</div>
+
 <div id="controls">
   <div id="drawerHead"><b>Opcje</b><button class="iconbtn" id="drawerClose">✕</button></div>
 
@@ -214,9 +248,9 @@
   <span class="grp">od trasy
     <select id="radius">
       <option value="100">100 m</option>
-      <option value="500">500 m</option>
+      <option value="500" selected>500 m</option>
       <option value="1000">1 km</option>
-      <option value="2000" selected>2 km</option>
+      <option value="2000">2 km</option>
       <option value="3000">3 km</option>
       <option value="5000">5 km</option>
     </select>
@@ -234,11 +268,13 @@
   <button id="helpBtn">Jak korzystać</button>
 </div>
 
+<div id="detail"></div>
+
 <div id="scrim"></div>
 
 <div id="help">
   <h2>Jak korzystać</h2>
-  <p class="s">MiroBike pokazuje, co czeka Cię przed siebie na trasie wyścigu — bez objeżdżania mapy.</p>
+  <p class="s">MiroBike pozwala Ci zaplanować postój czy nocleg podczas wyścigu, bez zbędnego analizowania mapy.</p>
   <ol>
     <li><b>Trasa.</b> W ☰ → „Wczytaj trasę (.gpx)" wczytaj ślad wyścigu. Apka startuje z ostatnio zapisaną trasą, więc kolejny raz nic nie musisz robić.</li>
     <li><b>Pobierz punkty.</b> Ustaw „od trasy" (jak daleko w bok szukać — 2 km to rozsądny start) i kliknij „Pobierz punkty". Pobranie zapisuje się <b>offline</b> — w terenie bez sieci dane będą dostępne.</li>
@@ -372,7 +408,7 @@ function loadBundle(b, skipPersist){
   const nm=b.name||"trasa";
   document.getElementById('trackname').textContent=nm+" · "+b.total_km.toFixed(1)+" km"+(b.is_loop?" · pętla":"");
   pois=b.pois.map(p=>({name:p.name,cats:p.cats,lat:p.lat,lon:p.lon,km:p.route_km,detourM:p.detour_m,side:p.side,
-    tags:{opening_hours:p.opening_hours||"","addr:city":p.city||"",phone:p.phone||"",website:p.website||""}}));
+    tags: p.tags || {opening_hours:p.opening_hours||"","addr:city":p.city||"",phone:p.phone||"",website:p.website||""}}));
   indexPois(); computeGaps(); loadFavs(nm); renderPOIs();
   document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
   document.getElementById('export').disabled=false;
@@ -461,7 +497,8 @@ window.toggleFav=function(id){
   if(favorites.has(id)){favorites.delete(id);favAlerted.delete(id);}
   else{favorites.add(id);if("Notification"in window&&Notification.permission==="default"){try{Notification.requestPermission();}catch(e){}}}
   saveFavs(); renderPOIs(); if(lastKm!=null) renderPanel();
-  const p=pidIndex.get(id); if(p&&p._m) p._m.setPopupContent(popupHtml(p));
+  const p=pidIndex.get(id);
+  if(p && document.body.classList.contains('detail-open')) document.getElementById('detail').innerHTML=detailHtml(p);
 };
 
 // ---- render POI ----
@@ -472,8 +509,7 @@ function renderPOIs(){
     if(!visible(p)) continue;
     const id=pid(p), isFav=favorites.has(id), c=CATS[p.cats[0]].color;
     const m=L.circleMarker([p.lat,p.lon],{radius:isFav?6:4,color:isFav?css('--fav'):c,weight:isFav?2:1,fillColor:c,fillOpacity:.9}).addTo(poiLayer);
-    m.bindPopup(popupHtml(p),{closeButton:true});
-    m.on('click',()=>{selPid=id;highlightList();});
+    m.on('click',()=>openDetail(p));
     p._m=m;
     if(id===selPid) m.setStyle({radius:8,weight:3,color:css('--route')});
   }
@@ -492,11 +528,46 @@ function popupHtml(p){
 }
 window.selectFromList=function(id){
   const p=pidIndex.get(id); if(!p) return;
-  selPid=id;
-  if(document.body.classList.contains('map-open')){ map.setView([p.lat,p.lon],Math.max(map.getZoom(),15)); renderPOIs(); if(p._m) p._m.openPopup(); }
-  else renderPOIs();
-  highlightList();
+  openDetail(p);
 };
+function openDetail(p){
+  selPid=pid(p);
+  document.getElementById('detail').innerHTML=detailHtml(p);
+  document.body.classList.add('detail-open');
+  if(document.body.classList.contains('map-open')){ map.setView([p.lat,p.lon],Math.max(map.getZoom(),15)); }
+  renderPOIs(); highlightList();
+}
+window.closeDetail=function(){ document.body.classList.remove('detail-open'); };
+function detailHtml(p){
+  const id=pid(p), t=p.tags||{}, col=CATS[p.cats[0]].color, cats=p.cats.map(c=>CATS[c].label).join(" · ");
+  const street=[t["addr:street"],t["addr:housenumber"]].filter(Boolean).join(" ");
+  const cityLine=[t["addr:postcode"],t["addr:city"]].filter(Boolean).join(" ");
+  const addr=[street,cityLine].filter(Boolean).join(", ");
+  const ph=t.phone||t["contact:phone"]||"";
+  const web=t.website||t["contact:website"]||"";
+  const mail=t.email||t["contact:email"]||"";
+  const isSleep=p.cats.includes("sleep");
+  const gmaps=`https://www.google.com/maps/search/?api=1&query=${p.lat}%2C${p.lon}`;
+  const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat}%2C${p.lon}`;
+  const booking=`https://www.booking.com/searchresults.html?ss=${encodeURIComponent((p.name||"")+" "+(t["addr:city"]||""))}`;
+  let info=`<div class="dr">km ${p.km.toFixed(1)} · ${p.detourM} m od trasy ${p.side||""}</div>`;
+  if(t.stars) info+=`<div class="dr">⭐ ${esc(t.stars)}</div>`;
+  if(t.opening_hours) info+=`<div class="dr">🕒 ${esc(t.opening_hours)}</div>`;
+  if(t.cuisine) info+=`<div class="dr">🍽 ${esc(t.cuisine.replace(/;/g,", "))}</div>`;
+  if(addr) info+=`<div class="dr">📍 ${esc(addr)}</div>`;
+  if(mail) info+=`<div class="dr">✉ ${esc(mail)}</div>`;
+  const acts=[];
+  if(ph) acts.push(`<a class="act" href="tel:${esc(ph)}">☎ Zadzwoń</a>`);
+  if(web) acts.push(`<a class="act" href="${esc(web)}" target="_blank" rel="noopener">🌐 Strona</a>`);
+  if(isSleep) acts.push(`<a class="act" href="${booking}" target="_blank" rel="noopener">🛏 Booking</a>`);
+  acts.push(`<a class="act" href="${gmaps}" target="_blank" rel="noopener">🗺 Mapy Google</a>`);
+  acts.push(`<a class="act" href="${nav}" target="_blank" rel="noopener">🧭 Nawiguj</a>`);
+  const isFav=favorites.has(id);
+  return `<div class="dh"><div><div class="dn">${esc(p.name)}</div><div class="dc" style="color:${col}">${cats}</div></div>`+
+    `<button class="iconbtn" onclick="closeDetail()">✕</button></div>${info}`+
+    `<div class="acts">${acts.join("")}</div>`+
+    `<button class="favbig ${isFav?'is':''}" onclick="toggleFav('${id}')">${isFav?'★ w ulubionych':'☆ dodaj do ulubionych'}</button>`;
+}
 function highlightList(){
   document.querySelectorAll('ul.roadbook li').forEach(li=>li.classList.toggle('sel',li.dataset.id===selPid));
   const el=document.getElementById('li_'+cssEsc(selPid)); if(el) el.scrollIntoView({block:'nearest'});
@@ -596,6 +667,12 @@ function stopGPS(){
 }
 
 // ---- eksport / zapis offline ----
+function tagSubset(t){
+  t=t||{};
+  const keep=["opening_hours","phone","website","email","stars","cuisine","brand","wheelchair","internet_access",
+    "contact:phone","contact:website","contact:email","addr:street","addr:housenumber","addr:postcode","addr:city"];
+  const o={}; for(const k of keep) if(t[k]) o[k]=t[k]; return o;
+}
 function buildBundle(){
   const ds=downsample(route,100);
   return {
@@ -603,9 +680,7 @@ function buildBundle(){
     total_km:+(route.totalM/1000).toFixed(3), is_loop:route.isLoop,
     route:ds.lat.map((la,i)=>[+la.toFixed(6),+ds.lon[i].toFixed(6),+(ds.cum[i]/1000).toFixed(3)]),
     pois:pois.map(p=>({name:p.name,cats:p.cats,lat:+p.lat.toFixed(6),lon:+p.lon.toFixed(6),
-      route_km:+p.km.toFixed(3),detour_m:p.detourM,side:p.side,
-      opening_hours:p.tags?.opening_hours||"",city:p.tags?.["addr:city"]||"",
-      phone:p.tags?.phone||p.tags?.["contact:phone"]||"",website:p.tags?.website||p.tags?.["contact:website"]||""})),
+      route_km:+p.km.toFixed(3),detour_m:p.detourM,side:p.side, tags:tagSubset(p.tags)})),
     food_gaps:foodGaps.map(g=>({from_km:+g.fromKm.toFixed(2),to_km:+g.toKm.toFixed(2),gap_km:+g.gapKm.toFixed(2)})),
   };
 }
@@ -657,12 +732,13 @@ document.getElementById('range').addEventListener('change',()=>{if(lastKm!=null)
 // ---- mapa: pokaż/ukryj ----
 function setMapOpen(open){
   document.body.classList.toggle('map-open',open);
-  document.getElementById('mapBtn').textContent=open?"Ukryj mapę":"Mapa";
-  document.getElementById('mapBtn').classList.toggle('on',open);
+  const b=document.getElementById('mapBtn'); b.textContent=open?"Ukryj mapę":"Mapa"; b.classList.toggle('on',open);
+  document.querySelectorAll('#viewbar button').forEach(x=>x.classList.toggle('active',(x.dataset.v==='map')===open));
   if(open) setTimeout(()=>{map.invalidateSize(); fitRoute();},90);
 }
 document.getElementById('mapBtn').addEventListener('click',()=>setMapOpen(!document.body.classList.contains('map-open')));
 document.getElementById('mapClose').addEventListener('click',()=>setMapOpen(false));
+document.querySelectorAll('#viewbar button').forEach(b=>b.addEventListener('click',()=>setMapOpen(b.dataset.v==='map')));
 
 // ---- hamburger + pomoc ----
 function openMenu(){document.body.classList.add('menu-open');}
@@ -671,7 +747,7 @@ document.getElementById('hamb').addEventListener('click',()=>document.body.class
 document.getElementById('drawerClose').addEventListener('click',closeMenu);
 document.getElementById('helpBtn').addEventListener('click',()=>{closeMenu();document.body.classList.add('help-open');});
 document.getElementById('helpClose').addEventListener('click',()=>document.body.classList.remove('help-open'));
-document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');});
+document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');document.body.classList.remove('detail-open');});
 
 // ---- progress ----
 const progEl=document.getElementById('progress'), progFill=document.getElementById('progFill');
