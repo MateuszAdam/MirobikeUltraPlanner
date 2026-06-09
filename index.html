@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>MiroBike Ultra Planner</title>
 <meta name="theme-color" content="#14161b">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,40 +21,67 @@
     --route:#19e0d6; --here:#ffd23f; --warn:#ff5a5a; --fav:#ffd23f;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--ink);color:var(--txt);font-family:var(--sans);-webkit-font-smoothing:antialiased}
-  body{display:grid;grid-template-rows:auto auto 1fr;height:100vh;overflow:hidden}
+  body{display:grid;grid-template-rows:auto auto auto auto 1fr;height:100vh;height:100dvh;overflow:hidden}
+  button,select,input,label.btn{font-family:var(--sans)}
 
-  header{display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line)}
-  header img.logo{width:30px;height:30px;border-radius:8px;display:block}
-  header .word b{font-size:15px;letter-spacing:.02em;font-weight:800}
-  header .word span{font-size:11px;color:var(--dim);letter-spacing:.16em;text-transform:uppercase;margin-left:6px}
-  header .name{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)}
+  /* header */
+  header{display:flex;align-items:center;gap:11px;padding:calc(10px + var(--sat)) 14px 10px;border-bottom:1px solid var(--line)}
+  header img.logo{width:28px;height:28px;border-radius:8px;display:block}
+  header .word b{font-size:15px;font-weight:800}
+  header .word span{font-size:11px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;margin-left:6px}
+  header .spacer{flex:1}
+  .iconbtn{background:#232732;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px 11px;font-size:15px;cursor:pointer;line-height:1}
+  #mapBtn{background:var(--route);color:#04201e;border-color:transparent;font-weight:700;font-size:12px;padding:9px 13px}
+  #mapBtn.on{background:#232732;color:var(--txt);border:1px solid var(--line);font-weight:600}
+  #hamb{display:none}
 
-  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--ink2)}
-  .bar label.btn,.bar button,.bar select,.bar input[type=number]{
-    font-family:var(--sans);font-size:12px;color:var(--txt);background:#232732;border:1px solid var(--line);
-    border-radius:8px;padding:7px 11px;cursor:pointer}
-  .bar button.go{background:var(--route);color:#04201e;border-color:transparent;font-weight:700}
-  .bar button.gps.on{background:var(--here);color:#3a2e00;border-color:transparent;font-weight:700}
-  .bar button:disabled{opacity:.45;cursor:default}
-  .bar .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
-  .bar .grp{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
-  .cat{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none}
+  /* quick row — zawsze widoczny: GPS, filtry, zasięg */
+  #quick{display:flex;gap:7px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--ink2);overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #quick::-webkit-scrollbar{display:none}
+  .cat{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:7px 11px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
   .cat .dot{width:9px;height:9px;border-radius:50%}
   .cat.off{opacity:.35}
-  .chip{font-size:11px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none}
+  .chip{font-size:12px;padding:7px 11px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap}
   .chip.on{background:var(--fav);color:#3a2e00;border-color:transparent;font-weight:700}
-  #file,#jsonfile{display:none}
-  .status{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto;max-width:42ch;text-align:right}
+  #gps{font-size:12px;padding:8px 12px;border-radius:999px;background:#232732;border:1px solid var(--line);color:var(--txt);cursor:pointer;white-space:nowrap}
+  #gps.on{background:var(--here);color:#3a2e00;border-color:transparent;font-weight:700}
+  #quick .grp{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);white-space:nowrap}
+  #quick select{font-size:12px;color:var(--txt);background:#232732;border:1px solid var(--line);border-radius:8px;padding:7px 9px}
 
+  /* progress bar */
+  #progress{height:3px;background:transparent;overflow:hidden}
+  #progress.on{background:#23303a}
+  #progFill{height:100%;width:0;background:linear-gradient(90deg,var(--route),#7cf6c0,var(--here));background-size:200% 100%;transition:width .35s ease}
+  #progress.on #progFill{animation:flow 1.1s linear infinite}
+  @keyframes flow{0%{background-position:0% 0}100%{background-position:200% 0}}
+
+  /* status */
+  #status{font-family:var(--mono);font-size:11px;color:var(--dim);padding:7px 14px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* main */
   main{display:grid;grid-template-columns:1fr 384px;min-height:0}
-  #map{height:100%;background:#0c0d10}
+  body:not(.map-open) main{grid-template-columns:1fr}
+  body:not(.map-open) #map{display:none}
+  #map{height:100%;background:#0c0d10;position:relative}
   .leaflet-container{background:#0c0d10}
-  body.mapoff main{grid-template-columns:1fr}
-  body.mapoff #map{display:none}
-  body.mapoff aside{border-left:0}
+  #mapClose{display:none;position:absolute;top:calc(10px + var(--sat));right:10px;z-index:1200;background:#1c1f27ee;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px 12px;font-size:14px;cursor:pointer}
+
+  /* setup controls — desktop: pasek; mobile: szuflada */
+  #controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--ink2)}
+  #controls label.btn,#controls button,#controls select{font-size:12px;color:var(--txt);background:#232732;border:1px solid var(--line);border-radius:8px;padding:8px 11px;cursor:pointer}
+  #controls button.go{background:var(--route);color:#04201e;border-color:transparent;font-weight:700}
+  #controls button:disabled{opacity:.45;cursor:default}
+  #controls .grp{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+  #controls .sec{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);width:100%;margin:2px 0 -2px}
+  #file,#jsonfile{display:none}
+  #drawerHead{display:none}
+
+  aside{border-left:1px solid var(--line);overflow:auto;background:var(--ink);padding-bottom:var(--sab)}
+  body:not(.map-open) aside{border-left:0}
 
   .leaflet-popup-content-wrapper{background:var(--ink2);color:var(--txt);border:1px solid var(--line);border-radius:10px}
   .leaflet-popup-tip{background:var(--ink2)}
@@ -63,33 +90,31 @@
   .pop .pc{font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
   .pop .pr{font-family:var(--mono);font-size:12px;color:var(--dim);margin:2px 0}
   .pop a{color:var(--route)}
-  .pop .favbtn{margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#232732;color:var(--txt);cursor:pointer}
+  .pop .favbtn{margin-top:8px;font-size:12px;padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:#232732;color:var(--txt);cursor:pointer}
   .pop .favbtn.is{background:var(--fav);color:#3a2e00;border-color:transparent;font-weight:700}
 
-  aside{border-left:1px solid var(--line);overflow:auto;background:var(--ink)}
-  .here{padding:16px;border-bottom:1px solid var(--line)}
+  .here{padding:16px}
   .here .lab{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
   .here .km{font-family:var(--mono);font-size:46px;font-weight:700;line-height:1;letter-spacing:-.02em}
   .here .km small{font-size:16px;color:var(--dim);font-weight:400}
   .here .meta{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:6px}
-  .empty{padding:28px 18px;color:var(--dim);font-size:13px;line-height:1.5}
+  .empty{padding:26px 18px;color:var(--dim);font-size:13px;line-height:1.5}
 
-  .warn{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.45}
+  .warn{margin:0 12px 10px;padding:11px 13px;border-radius:10px;font-size:12.5px;line-height:1.45}
   .warn.food{background:#2a1416;color:#ffc9c9}
   .warn.fav{background:#2a2410;color:#ffe9a8}
   .warn b{color:#fff}
 
-  .nextrow{display:flex;border-bottom:1px solid var(--line)}
+  .nextrow{display:flex;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
   .nextrow .cell{flex:1;padding:10px 6px;text-align:center;border-right:1px solid var(--line)}
   .nextrow .cell:last-child{border-right:0}
   .nextrow .cl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
   .nextrow .cv{font-family:var(--mono);font-size:18px;font-weight:700;margin-top:3px}
   .nextrow .cn{font-size:10px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-  .listhdr{padding:10px 16px 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between}
+  .listhdr{padding:12px 16px 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);display:flex;justify-content:space-between}
   ul.roadbook{list-style:none;margin:0;padding:0 8px 28px}
-  ul.roadbook li{display:grid;grid-template-columns:62px 12px 1fr 22px;align-items:center;gap:9px;padding:9px 8px;border-bottom:1px solid #20242e;cursor:pointer;border-radius:8px}
-  ul.roadbook li:hover{background:#1b1f28}
+  ul.roadbook li{display:grid;grid-template-columns:62px 12px 1fr 30px;align-items:center;gap:9px;padding:11px 8px;border-bottom:1px solid #20242e;cursor:pointer;border-radius:8px}
   ul.roadbook li.sel{background:#222a39;outline:1px solid var(--route)}
   ul.roadbook li .d{font-family:var(--mono);font-size:16px;font-weight:700;text-align:right}
   ul.roadbook li .d small{font-size:10px;color:var(--dim);font-weight:400;display:block;margin-top:1px}
@@ -97,24 +122,95 @@
   ul.roadbook li .info .nm{font-size:13px;font-weight:600}
   ul.roadbook li .info .det{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
   ul.roadbook li .info .oh{color:var(--food)}
-  ul.roadbook li .star{font-size:16px;text-align:center;color:#41464f}
+  ul.roadbook li .star{font-size:18px;text-align:center;color:#41464f}
   ul.roadbook li .star.is{color:var(--fav)}
+
+  /* scrim + modale */
+  #scrim{display:none;position:fixed;inset:0;background:#000a;z-index:1100}
+  body.menu-open #scrim,body.help-open #scrim{display:block}
+  #help{display:none;position:fixed;z-index:1300;inset:auto 0 0 0;max-height:86dvh;overflow:auto;background:var(--ink2);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:18px 18px calc(22px + var(--sab))}
+  body.help-open #help{display:block}
+  #help h2{margin:2px 0 4px;font-size:16px}
+  #help p.s{color:var(--dim);font-size:12.5px;margin:0 0 14px}
+  #help ol{margin:0;padding-left:20px}
+  #help li{margin:0 0 11px;font-size:13.5px;line-height:1.5}
+  #help li b{color:var(--txt)}
+  #help .close{margin-top:8px;width:100%;padding:12px;border-radius:10px;border:none;background:var(--route);color:#04201e;font-weight:700;font-size:14px;cursor:pointer}
+
+  @media(min-width:821px){
+    #help{inset:50% auto auto 50%;transform:translate(-50%,-50%);max-width:520px;border-radius:16px;border:1px solid var(--line)}
+  }
+
+  /* ---------- MOBILE ---------- */
+  @media(max-width:820px){
+    body{grid-template-rows:auto auto auto auto 1fr}
+    #hamb{display:inline-flex}
+    header .word span{display:none}
+    header .name{display:none}
+    main{grid-template-columns:1fr !important}
+    aside{border-left:0}
+    /* mapa = pełnoekranowa nakładka */
+    #map{position:fixed;inset:0;z-index:1000;height:100dvh}
+    body:not(.map-open) #map{display:none}
+    #mapClose{display:block}
+    /* szuflada z opcjami */
+    #controls{position:fixed;top:0;right:0;width:min(86vw,330px);height:100dvh;transform:translateX(105%);transition:transform .25s ease;z-index:1200;
+      flex-direction:column;align-items:stretch;flex-wrap:nowrap;overflow:auto;border-left:1px solid var(--line);
+      padding:calc(14px + var(--sat)) 16px calc(18px + var(--sab))}
+    body.menu-open #controls{transform:none}
+    #controls .grp{justify-content:space-between}
+    #controls label.btn,#controls button,#controls select{width:100%;text-align:center;padding:12px}
+    #controls .grp select{width:auto;flex:1}
+    #drawerHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+    #drawerHead b{font-size:14px}
+  }
 </style>
 </head>
-<body>
+<body class="map-open">
 
 <header>
+  <button id="hamb" class="iconbtn" aria-label="Opcje">☰</button>
   <img class="logo" src="logo.svg" alt="">
   <div class="word"><b>MiroBike</b><span>Ultra Planner</span></div>
+  <span class="spacer"></span>
   <span class="name" id="trackname">— brak trasy —</span>
+  <button id="mapBtn">Mapa</button>
 </header>
 
-<div class="bar">
+<div id="quick">
+  <button id="gps" disabled>Śledź GPS</button>
+  <span class="cat" data-cat="food"><span class="dot" style="background:var(--food)"></span>spożywcze</span>
+  <span class="cat" data-cat="sleep"><span class="dot" style="background:var(--sleep)"></span>noclegi</span>
+  <span class="cat" data-cat="fuel"><span class="dot" style="background:var(--fuel)"></span>paliwo</span>
+  <span class="cat" data-cat="eat"><span class="dot" style="background:var(--eat)"></span>jedzenie</span>
+  <span class="chip" id="favchip">★ ulubione</span>
+  <span class="grp">do
+    <select id="range">
+      <option value="50">50 km</option>
+      <option value="100" selected>100 km</option>
+      <option value="200">200 km</option>
+    </select>
+  </span>
+</div>
+
+<div id="progress"><div id="progFill"></div></div>
+<div id="status">Ładuję trasę…</div>
+
+<main>
+  <div id="map"><button id="mapClose">✕ zamknij mapę</button></div>
+  <aside id="panel">
+    <div class="empty">Dotknij mapy (symulacja pozycji) albo włącz <b>Śledź GPS</b>. Pokażę, co masz przed sobą i za ile kilometrów. Pierwszy raz? Otwórz <b>☰ → Jak korzystać</b>.</div>
+  </aside>
+</main>
+
+<div id="controls">
+  <div id="drawerHead"><b>Opcje</b><button class="iconbtn" id="drawerClose">✕</button></div>
+
+  <div class="sec">Trasa</div>
   <label class="btn" for="file">Wczytaj trasę (.gpx)</label>
   <input id="file" type="file" accept=".gpx">
 
-  <span class="sep"></span>
-
+  <div class="sec">Punkty</div>
   <span class="grp">od trasy
     <select id="radius">
       <option value="100">100 m</option>
@@ -125,47 +221,37 @@
       <option value="5000">5 km</option>
     </select>
   </span>
-
-  <span class="cat" data-cat="food"><span class="dot" style="background:var(--food)"></span>spożywcze</span>
-  <span class="cat" data-cat="sleep"><span class="dot" style="background:var(--sleep)"></span>noclegi</span>
-  <span class="cat" data-cat="fuel"><span class="dot" style="background:var(--fuel)"></span>paliwo</span>
-  <span class="cat" data-cat="eat"><span class="dot" style="background:var(--eat)"></span>jedzenie</span>
-  <span class="chip" id="favchip">★ tylko ulubione</span>
-
-  <span class="grp">zasięg listy
-    <select id="range">
-      <option value="50">50 km</option>
-      <option value="100" selected>100 km</option>
-      <option value="200">200 km</option>
-    </select>
-  </span>
-
-  <span class="sep"></span>
-
   <button id="fetch" class="go" disabled>Pobierz punkty</button>
-  <button id="gps" class="gps" disabled>Śledź GPS</button>
-  <button id="mapToggle">Zwiń mapę</button>
-
-  <span class="sep"></span>
   <label class="btn" for="jsonfile">Wczytaj punkty</label>
   <input id="jsonfile" type="file" accept=".json">
   <button id="export" disabled>Eksportuj punkty</button>
 
-  <span class="sep"></span>
-  <span class="grp">offline
-    <select id="saved" title="trasy zapisane na urządzeniu"></select>
-  </span>
-  <button id="del" title="usuń bieżącą trasę z pamięci offline">Usuń</button>
+  <div class="sec">Zapisane offline</div>
+  <span class="grp"><select id="saved" title="trasy zapisane na urządzeniu"></select></span>
+  <button id="del">Usuń bieżącą</button>
 
-  <span class="status" id="status">Ładuję trasę…</span>
+  <div class="sec">Pomoc</div>
+  <button id="helpBtn">Jak korzystać</button>
 </div>
 
-<main>
-  <div id="map"></div>
-  <aside id="panel">
-    <div class="empty">Kliknij na mapie (symulacja pozycji) albo włącz <b>Śledź GPS</b>. Pokażę, co masz przed sobą i za ile kilometrów.</div>
-  </aside>
-</main>
+<div id="scrim"></div>
+
+<div id="help">
+  <h2>Jak korzystać</h2>
+  <p class="s">MiroBike pokazuje, co czeka Cię przed siebie na trasie wyścigu — bez objeżdżania mapy.</p>
+  <ol>
+    <li><b>Trasa.</b> W ☰ → „Wczytaj trasę (.gpx)" wczytaj ślad wyścigu. Apka startuje z ostatnio zapisaną trasą, więc kolejny raz nic nie musisz robić.</li>
+    <li><b>Pobierz punkty.</b> Ustaw „od trasy" (jak daleko w bok szukać — 2 km to rozsądny start) i kliknij „Pobierz punkty". Pobranie zapisuje się <b>offline</b> — w terenie bez sieci dane będą dostępne.</li>
+    <li><b>Filtry.</b> U góry włączaj/wyłączaj kategorie (spożywcze, noclegi, paliwo, jedzenie) oraz „★ ulubione". Lista i kropki na mapie reagują od razu.</li>
+    <li><b>Pozycja.</b> Na rowerze włącz <b>„Śledź GPS"</b> — zobaczysz swoją pozycję i listę „przede mną" z odległością w kilometrach. Bez GPS możesz dotknąć mapy, by zasymulować pozycję.</li>
+    <li><b>Co przede mną.</b> Lista pokazuje punkty rosnąco wg kilometra: „+3,2 km" to ile zostało, obok metry od trasy i strona (L/P). „do 50/100/200 km" ustawia, jak daleko w przód patrzeć.</li>
+    <li><b>Szczegóły.</b> Dotknij punkt na liście lub mapie — zobaczysz godziny otwarcia, telefon i adres (o ile są w danych). Gwiazdką dodajesz do <b>ulubionych</b>.</li>
+    <li><b>Ostrzeżenia.</b> Czerwone = wjeżdżasz w długi odcinek bez sklepu (zatankuj zapasy). Żółte = ulubiony punkt (np. nocleg) przed Tobą — „zostało Ci X km".</li>
+    <li><b>Mapa.</b> Przyciskiem „Mapa" pokazujesz ją na pełny ekran, „✕ zamknij mapę" chowasz. Offline działa lista i pozycja; kafelki podkładu mapy wymagają sieci.</li>
+    <li><b>Instalacja.</b> W Safari: Udostępnij → „Dodaj do ekranu początkowego". Apka odpali się jak natywna i będzie działać offline.</li>
+  </ol>
+  <button class="close" id="helpClose">Rozumiem</button>
+</div>
 
 <script>
 const CATS = {
@@ -207,7 +293,7 @@ function pid(p){return p.lat.toFixed(5)+","+p.lon.toFixed(5);}
 
 function initMap(){
   map=L.map('map',{zoomControl:true,attributionControl:false}).setView([50.81,15.0],9);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,opacity:.55}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,opacity:.7}).addTo(map);
   poiLayer=L.layerGroup().addTo(map);
   map.on('click',e=>setHere(e.latlng.lat,e.latlng.lng,false));
 }
@@ -250,7 +336,7 @@ function project(plat,plon,winKm){
 
 // ---- ładowanie trasy ----
 document.getElementById('file').addEventListener('change',ev=>{
-  const f=ev.target.files[0]; if(!f) return;
+  const f=ev.target.files[0]; if(!f) return; closeMenu();
   const rd=new FileReader();
   rd.onload=()=>{try{loadRoute(parseGPX(rd.result),f.name);}catch(e){setStatus("Błąd GPX: "+e.message);}};
   rd.readAsText(f);
@@ -262,18 +348,19 @@ function loadRoute(r,name){
   pois=[];pidIndex.clear();foodGaps=[];renderPOIs();document.getElementById('panel').innerHTML='';
   loadFavs(name);
   document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
-  setStatus("Trasa wczytana. Wybierz odległość i pobierz punkty.");
+  setStatus("Trasa wczytana. Ustaw „od trasy” w ☰ i kliknij „Pobierz punkty”.");
   persistBundle();
 }
 function drawRoute(){
   if(routeLine) routeLine.remove();
-  routeLine=L.polyline(route.pts.map(p=>[p.lat,p.lon]),{color:css('--route'),weight:3,opacity:.9}).addTo(map);
-  if(!document.body.classList.contains('mapoff')) map.fitBounds(routeLine.getBounds(),{padding:[30,30]});
+  routeLine=L.polyline(route.pts.map(p=>[p.lat,p.lon]),{color:css('--route'),weight:3,opacity:.95}).addTo(map);
+  if(document.body.classList.contains('map-open')) fitRoute();
 }
+function fitRoute(){ if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[26,26]}); }
 
-// ---- ładowanie punktów (bundle: plik lub wbudowany) ----
+// ---- ładowanie punktów ----
 document.getElementById('jsonfile').addEventListener('change',ev=>{
-  const f=ev.target.files[0]; if(!f) return;
+  const f=ev.target.files[0]; if(!f) return; closeMenu();
   const rd=new FileReader();
   rd.onload=()=>{try{loadBundle(JSON.parse(rd.result));}catch(e){setStatus("Błąd JSON: "+e.message);}};
   rd.readAsText(f);
@@ -289,18 +376,18 @@ function loadBundle(b, skipPersist){
   indexPois(); computeGaps(); loadFavs(nm); renderPOIs();
   document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
   document.getElementById('export').disabled=false;
-  setStatus(pois.length+" punktów wczytanych. Kliknij na mapie lub włącz GPS.");
+  setStatus(pois.length+" punktów. Dotknij mapy lub włącz „Śledź GPS”.");
   if(!skipPersist) persistBundle(b);
 }
 function indexPois(){pidIndex.clear();for(const p of pois) pidIndex.set(pid(p),p);}
 
-// ---- Overpass (resumowalny) ----
+// ---- Overpass ----
 document.getElementById('fetch').addEventListener('click',fetchPOIs);
 let fetchState=null;
 async function fetchPOIs(){
   if(!route) return;
   if(!active.size){setStatus("Włącz przynajmniej jedną kategorię.");return;}
-  const btn=document.getElementById('fetch'); btn.disabled=true;
+  const btn=document.getElementById('fetch'); btn.disabled=true; closeMenu();
   const r=R(); const filters=[];
   if(active.has("food"))  filters.push('nw["shop"~"^(supermarket|convenience|grocery|greengrocer|bakery|general|deli|butcher|farm)$"]');
   if(active.has("sleep")) filters.push('nw["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]');
@@ -312,7 +399,7 @@ async function fetchPOIs(){
     const batches=[];for(let i=0;i<c.length;i+=25)batches.push(c.slice(i,i+25));
     fetchState={batches,done:new Set(),seen:new Map(),r,key,filters};
   }
-  const S=fetchState;
+  const S=fetchState; progShow(); progSet(S.done.size,S.batches.length);
   for(const i of S.batches.map((_,i)=>i).filter(i=>!S.done.has(i))){
     setStatus(`Pobieram… ${S.done.size+1}/${S.batches.length} · ${S.seen.size} POI`);
     const chain=S.batches[i].join(",");
@@ -329,12 +416,13 @@ async function fetchPOIs(){
       }
       S.done.add(i); rawDots(S.seen);
     }catch(e){}
+    progSet(S.done.size,S.batches.length);
     await sleep(350+Math.random()*400);
   }
-  finalize(S.seen); btn.disabled=false;
+  progHide(); finalize(S.seen); btn.disabled=false;
   const left=S.batches.length-S.done.size;
   if(left>0){btn.textContent="Dobierz resztę ("+left+")";setStatus(`Mam ${pois.length} POI. ${left} paczek padło — kliknij „Dobierz resztę".`);}
-  else{btn.textContent="Pobierz punkty";setStatus(pois.length+" POI gotowych. Kliknij na mapie lub włącz GPS.");}
+  else{btn.textContent="Pobierz punkty";setStatus(pois.length+" POI gotowych i zapisanych offline. Dotknij mapy lub włącz GPS.");}
 }
 function finalize(seen){
   pois=[];
@@ -405,8 +493,8 @@ function popupHtml(p){
 window.selectFromList=function(id){
   const p=pidIndex.get(id); if(!p) return;
   selPid=id;
-  if(!document.body.classList.contains('mapoff')){ map.setView([p.lat,p.lon],Math.max(map.getZoom(),15)); }
-  renderPOIs(); if(p._m && !document.body.classList.contains('mapoff')) p._m.openPopup();
+  if(document.body.classList.contains('map-open')){ map.setView([p.lat,p.lon],Math.max(map.getZoom(),15)); renderPOIs(); if(p._m) p._m.openPopup(); }
+  else renderPOIs();
   highlightList();
 };
 function highlightList(){
@@ -447,14 +535,15 @@ function renderPanel(){
 
   let html=`<div class="here"><div class="lab">jesteś na</div>
     <div class="km">${cur.toFixed(1)}<small> / ${total.toFixed(0)} km</small></div>
-    <div class="meta">${(total-cur).toFixed(1)} km do końca${offNote}</div></div>${warn}
+    <div class="meta">${(total-cur).toFixed(1)} km do końca${offNote}</div></div>
     <div class="nextrow">${ORDER.filter(c=>active.has(c)).map(c=>{const n=nextOf[c];
       return `<div class="cell"><div class="cl" style="color:${CATS[c].color}">${CATS[c].label}</div>
         <div class="cv">${n?("+"+n.delta.toFixed(1)):"—"}</div><div class="cn">${n?esc(n.p.name):"brak"}</div></div>`;}).join("")}</div>
+    ${warn?`<div style="height:10px"></div>`+warn:""}
     <div class="listhdr"><span>przed Tobą (do ${rg.toFixed(0)} km)</span><span>${up.length}</span></div>`;
 
-  if(!pois.length) html+=`<div class="empty" style="padding:18px">Brak punktów.</div>`;
-  else if(!up.length) html+=`<div class="empty" style="padding:18px">Nic w zasięgu ${rg.toFixed(0)} km dla wybranych filtrów. Zwiększ zasięg lub odległość.</div>`;
+  if(!pois.length) html+=`<div class="empty" style="padding:18px">Brak punktów. Otwórz ☰ → „Pobierz punkty".</div>`;
+  else if(!up.length) html+=`<div class="empty" style="padding:18px">Nic w zasięgu ${rg.toFixed(0)} km dla wybranych filtrów. Zwiększ zasięg lub „od trasy".</div>`;
   else html+=`<ul class="roadbook">`+up.slice(0,120).map(({p,delta})=>{
       const id=pid(p),c=CATS[p.cats[0]],isFav=favorites.has(id);
       const oh=p.tags?.opening_hours?`<span class="oh">${esc(p.tags.opening_hours)}</span> · `:"";
@@ -490,10 +579,10 @@ document.getElementById('gps').addEventListener('click',async()=>{
     pos=>{ setHere(pos.coords.latitude,pos.coords.longitude,true);
            if(hereAcc) hereAcc.remove();
            hereAcc=L.circle([pos.coords.latitude,pos.coords.longitude],{radius:pos.coords.accuracy||30,color:css('--here'),weight:1,fillOpacity:.06}).addTo(map);
-           if(!document.body.classList.contains('mapoff')) map.panTo([pos.coords.latitude,pos.coords.longitude]); },
+           if(document.body.classList.contains('map-open')) map.panTo([pos.coords.latitude,pos.coords.longitude]); },
     err=>{ setStatus("GPS: "+err.message+" (na telefonie wymaga HTTPS)"); },
     {enableHighAccuracy:true,maximumAge:2000,timeout:15000});
-  btn.classList.add('on'); btn.textContent="GPS: śledzę — stop";
+  btn.classList.add('on'); btn.textContent="GPS ●";
   try{ if("wakeLock"in navigator) wakeLock=await navigator.wakeLock.request("screen"); }catch(e){}
   setStatus("Śledzę GPS… (ekran utrzymany)");
 });
@@ -503,10 +592,10 @@ function stopGPS(){
   if(hereAcc){hereAcc.remove();hereAcc=null;}
   if(wakeLock){try{wakeLock.release();}catch(e){}wakeLock=null;}
   btn.classList.remove('on'); btn.textContent="Śledź GPS";
-  setStatus("GPS zatrzymany. Możesz klikać na mapie.");
+  setStatus("GPS zatrzymany. Możesz dotknąć mapy.");
 }
 
-// ---- eksport / trwały zapis offline ----
+// ---- eksport / zapis offline ----
 function buildBundle(){
   const ds=downsample(route,100);
   return {
@@ -526,42 +615,31 @@ document.getElementById('export').addEventListener('click',()=>{
   a.href=URL.createObjectURL(new Blob([JSON.stringify(buildBundle(),null,1)],{type:"application/json"}));
   a.download="bundle.json";a.click();
 });
-
-// zapis na urządzeniu — trasa + punkty są dostępne offline przy kolejnym otwarciu
 function persistBundle(b){
   if(!route) return;
-  try{
-    b=b||buildBundle();
+  try{ b=b||buildBundle();
     localStorage.setItem("mb_bundle:"+b.name, JSON.stringify(b));
-    localStorage.setItem("mb_last", b.name);
-    refreshSaved();
-  }catch(e){ setStatus("Zapis offline nieudany ("+e.message+") — dane mogą nie przetrwać odświeżenia."); }
+    localStorage.setItem("mb_last", b.name); refreshSaved();
+  }catch(e){ setStatus("Zapis offline nieudany ("+e.message+")."); }
 }
-function listSaved(){
-  const out=[];
-  try{ for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i); if(k&&k.indexOf("mb_bundle:")===0) out.push(k.slice(10));} }catch(e){}
-  return out.sort();
-}
+function listSaved(){const out=[];try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf("mb_bundle:")===0)out.push(k.slice(10));}}catch(e){}return out.sort();}
 function refreshSaved(){
   const sel=document.getElementById('saved'); if(!sel) return;
   let cur=""; try{cur=localStorage.getItem("mb_last")||"";}catch(e){}
   const names=listSaved();
-  sel.innerHTML = names.length
-    ? names.map(n=>`<option ${n===cur?'selected':''} value="${esc(n)}">${esc(n)}</option>`).join("")
-    : `<option value="">— brak —</option>`;
+  sel.innerHTML=names.length?names.map(n=>`<option ${n===cur?'selected':''} value="${esc(n)}">${esc(n)}</option>`).join(""):`<option value="">— brak —</option>`;
 }
 document.getElementById('saved').addEventListener('change',e=>{
   const n=e.target.value; if(!n) return;
   try{ const raw=localStorage.getItem("mb_bundle:"+n);
-    if(raw){ localStorage.setItem("mb_last",n); loadBundle(JSON.parse(raw),true); setStatus("Wczytano offline: "+n); } }
+    if(raw){ localStorage.setItem("mb_last",n); loadBundle(JSON.parse(raw),true); setStatus("Wczytano offline: "+n); closeMenu(); } }
   catch(err){ setStatus("Błąd wczytania: "+err.message); }
 });
 document.getElementById('del').addEventListener('click',()=>{
   let cur=""; try{cur=localStorage.getItem("mb_last")||"";}catch(e){}
   if(!cur){ setStatus("Brak zapisanej trasy do usunięcia."); return; }
   try{ localStorage.removeItem("mb_bundle:"+cur); localStorage.removeItem("mb_last"); }catch(e){}
-  refreshSaved();
-  setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
+  refreshSaved(); setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
 });
 
 // ---- przełączniki ----
@@ -575,11 +653,31 @@ document.getElementById('favchip').addEventListener('click',()=>{
   renderPOIs(); if(lastKm!=null) renderPanel();
 });
 document.getElementById('range').addEventListener('change',()=>{if(lastKm!=null)renderPanel();});
-document.getElementById('mapToggle').addEventListener('click',()=>{
-  const off=document.body.classList.toggle('mapoff');
-  document.getElementById('mapToggle').textContent=off?"Pokaż mapę":"Zwiń mapę";
-  if(!off){ setTimeout(()=>{map.invalidateSize(); if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[30,30]});},60); }
-});
+
+// ---- mapa: pokaż/ukryj ----
+function setMapOpen(open){
+  document.body.classList.toggle('map-open',open);
+  document.getElementById('mapBtn').textContent=open?"Ukryj mapę":"Mapa";
+  document.getElementById('mapBtn').classList.toggle('on',open);
+  if(open) setTimeout(()=>{map.invalidateSize(); fitRoute();},90);
+}
+document.getElementById('mapBtn').addEventListener('click',()=>setMapOpen(!document.body.classList.contains('map-open')));
+document.getElementById('mapClose').addEventListener('click',()=>setMapOpen(false));
+
+// ---- hamburger + pomoc ----
+function openMenu(){document.body.classList.add('menu-open');}
+function closeMenu(){document.body.classList.remove('menu-open');}
+document.getElementById('hamb').addEventListener('click',()=>document.body.classList.toggle('menu-open'));
+document.getElementById('drawerClose').addEventListener('click',closeMenu);
+document.getElementById('helpBtn').addEventListener('click',()=>{closeMenu();document.body.classList.add('help-open');});
+document.getElementById('helpClose').addEventListener('click',()=>document.body.classList.remove('help-open'));
+document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');});
+
+// ---- progress ----
+const progEl=document.getElementById('progress'), progFill=document.getElementById('progFill');
+function progShow(){progEl.classList.add('on');}
+function progHide(){progEl.classList.remove('on');progFill.style.width='0%';}
+function progSet(done,total){progFill.style.width=(total?Math.round(done/total*100):0)+'%';}
 
 function esc(s){return (s||"").replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function cssEsc(s){return (s||"").replace(/[^a-zA-Z0-9_-]/g,"\\$&");}
@@ -587,17 +685,14 @@ function setStatus(s){document.getElementById('status').textContent=s;}
 
 // ---- start ----
 initMap();
+// na telefonie startuj z listą (mapa schowana), na desktopie z mapą
+setMapOpen(!window.matchMedia("(max-width:820px)").matches);
 (function boot(){
   let lastName=null, raw=null;
   try{ lastName=localStorage.getItem("mb_last"); if(lastName) raw=localStorage.getItem("mb_bundle:"+lastName); }catch(e){}
-  if(raw){
-    try{ loadBundle(JSON.parse(raw),true); setStatus("Wczytano zapisaną trasę offline: "+lastName); }
-    catch(e){ if(window.BUNDLE) loadBundle(window.BUNDLE); }
-  } else if(window.BUNDLE){
-    try{ loadBundle(window.BUNDLE); }catch(e){ setStatus("Błąd wbudowanych punktów: "+e.message); }
-  } else {
-    setStatus("Wczytaj trasę GPX albo punkty (bundle).");
-  }
+  if(raw){ try{ loadBundle(JSON.parse(raw),true); setStatus("Zapisana trasa offline: "+lastName); }catch(e){ if(window.BUNDLE) loadBundle(window.BUNDLE); } }
+  else if(window.BUNDLE){ try{ loadBundle(window.BUNDLE); }catch(e){ setStatus("Błąd punktów: "+e.message); } }
+  else setStatus("Otwórz ☰ → Wczytaj trasę GPX albo punkty.");
   refreshSaved();
 })();
 
