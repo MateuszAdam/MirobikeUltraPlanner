@@ -215,6 +215,20 @@
   @media(min-width:821px){
     #plan{inset:auto auto 18px 18px;max-width:420px;border-radius:14px;border:1px solid var(--line)}
   }
+  /* arkusz wsparcia (postaw kawę) */
+  #support{display:none;position:fixed;z-index:1300;inset:auto 0 0 0;background:var(--ink2);border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;padding:18px 18px calc(22px + var(--sab));max-height:80dvh;overflow:auto}
+  body.support-open #support{display:block}
+  body.support-open #scrim{display:block}
+  body.support-open #viewbar{display:none}
+  #support .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  #support .ph b{font-size:16px}
+  #support .sp{color:var(--dim);font-size:13.5px;line-height:1.55;margin:0 0 16px}
+  #support .coffee{display:block;text-align:center;text-decoration:none;background:var(--here);color:#3a2e00;font-weight:800;
+    font-size:15px;padding:14px;border-radius:12px}
+  @media(min-width:821px){
+    #support{inset:50% auto auto 50%;transform:translate(-50%,-50%);max-width:420px;border-radius:16px;border:1px solid var(--line)}
+  }
 </style>
 </head>
 <body class="map-open">
@@ -289,6 +303,9 @@
 
   <div class="sec">Pomoc</div>
   <button id="helpBtn">Jak korzystać</button>
+
+  <div class="sec">Wsparcie</div>
+  <button id="supportBtn">☕ Postaw mi kawę</button>
 </div>
 
 <div id="detail"></div>
@@ -310,7 +327,14 @@
     <li><b>Mapa.</b> Przyciskiem „Mapa" pokazujesz ją na pełny ekran, „✕ zamknij mapę" chowasz. Offline działa lista i pozycja; kafelki podkładu mapy wymagają sieci.</li>
     <li><b>Instalacja.</b> W Safari: Udostępnij → „Dodaj do ekranu początkowego". Apka odpali się jak natywna i będzie działać offline.</li>
   </ol>
+  <p class="s" style="margin-top:12px">Niektóre linki do noclegów (Booking) mogą być afiliacyjne — jeśli zarezerwujesz przez nie nocleg, wspierasz rozwój aplikacji. Cena dla Ciebie się nie zmienia.</p>
   <button class="close" id="helpClose">Rozumiem</button>
+</div>
+
+<div id="support">
+  <div class="ph"><b>☕ Postaw mi kawę</b><button class="iconbtn" id="supportClose">✕</button></div>
+  <p class="sp">MiroBike planner jest darmowy i powstał jako pomoc dla mojego taty, zapalonego ultramaratończyka, którego mogłeś spotkać na trasie. Jeśli ta apka ci pomogła w ultra możesz postawić mi kawę — będzie mi bardzo miło.</p>
+  <a class="coffee" id="coffeeLink" href="#" target="_blank" rel="noopener">☕ Postaw kawę</a>
 </div>
 
 <script>
@@ -330,6 +354,12 @@ const OVERPASS=[
   "https://overpass.private.coffee/api/interpreter",
 ];
 const FAV_THRESHOLDS=[50,20,10,5,2];
+
+// ——— KONFIGURACJA (uzupełnij swoje) ———
+// Link do zbiórki: buycoffee.to/twoj-profil (PL) albo buymeacoffee.com/twoj-profil
+const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
+// Booking.com Affiliate ID (AID). Puste = zwykły link bez prowizji.
+const BOOKING_AID = "";
 
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function R(){return parseInt(document.getElementById('radius').value,10);}
@@ -563,6 +593,11 @@ function openDetail(p){
   renderPOIs(); highlightList();
 }
 window.closeDetail=function(){ document.body.classList.remove('detail-open'); };
+function bookingUrl(name,city){
+  let u="https://www.booking.com/searchresults.html?ss="+encodeURIComponent((name||"")+" "+(city||""));
+  if(BOOKING_AID) u+="&aid="+encodeURIComponent(BOOKING_AID)+"&label=mirobike";
+  return u;
+}
 function detailHtml(p){
   const id=pid(p), t=p.tags||{}, col=CATS[p.cats[0]].color, cats=p.cats.map(c=>CATS[c].label).join(" · ");
   const street=[t["addr:street"],t["addr:housenumber"]].filter(Boolean).join(" ");
@@ -574,7 +609,7 @@ function detailHtml(p){
   const isSleep=p.cats.includes("sleep");
   const gmaps=`https://www.google.com/maps/search/?api=1&query=${p.lat}%2C${p.lon}`;
   const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat}%2C${p.lon}`;
-  const booking=`https://www.booking.com/searchresults.html?ss=${encodeURIComponent((p.name||"")+" "+(t["addr:city"]||""))}`;
+  const booking=bookingUrl(p.name,t["addr:city"]);
   let info=`<div class="dr">km ${p.km.toFixed(1)} · ${p.detourM} m od trasy ${p.side||""}</div>`;
   if(t.stars) info+=`<div class="dr">⭐ ${esc(t.stars)}</div>`;
   if(t.opening_hours) info+=`<div class="dr">🕒 ${esc(t.opening_hours)}</div>`;
@@ -807,7 +842,11 @@ document.getElementById('hamb').addEventListener('click',()=>document.body.class
 document.getElementById('drawerClose').addEventListener('click',closeMenu);
 document.getElementById('helpBtn').addEventListener('click',()=>{closeMenu();document.body.classList.add('help-open');});
 document.getElementById('helpClose').addEventListener('click',()=>document.body.classList.remove('help-open'));
-document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');document.body.classList.remove('detail-open');document.body.classList.remove('plan-open');});
+document.getElementById('supportBtn').addEventListener('click',()=>{
+  closeMenu(); document.getElementById('coffeeLink').href=SUPPORT_URL; document.body.classList.add('support-open');
+});
+document.getElementById('supportClose').addEventListener('click',()=>document.body.classList.remove('support-open'));
+document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');document.body.classList.remove('detail-open');document.body.classList.remove('plan-open');document.body.classList.remove('support-open');});
 
 // ---- progress ----
 const progEl=document.getElementById('progress'), progFill=document.getElementById('progFill');
