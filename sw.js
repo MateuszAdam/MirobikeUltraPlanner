@@ -1,5 +1,5 @@
 // MiroBike Ultra Planner — service worker (offline app shell)
-const CACHE = "mirobike-v3";
+const CACHE = "mirobike-v6";
 const ASSETS = [
   "./", "index.html", "data.js", "logo.svg", "manifest.webmanifest",
   "icon-192.png", "icon-512.png", "apple-touch-icon.png",

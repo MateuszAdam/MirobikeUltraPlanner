@@ -190,8 +190,30 @@
     #controls .grp{justify-content:space-between}
     #controls label.btn,#controls button,#controls select{width:100%;text-align:center;padding:12px}
     #controls .grp select{width:auto;flex:1}
-    #drawerHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-    #drawerHead b{font-size:14px}
+    #drawerHead{display:flex;justify-content:flex-end;margin-bottom:4px}
+    #drawerHead button{width:auto;padding:8px 14px;font-size:18px;line-height:1}
+    body.menu-open #viewbar,body.help-open #viewbar,body.detail-open #viewbar{display:none}
+  }
+  /* arkusz Plan przystanków */
+  #plan{display:none;position:fixed;z-index:1300;inset:auto 0 0 0;background:var(--ink2);border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;padding:16px 18px calc(18px + var(--sab));max-height:84dvh;overflow:auto}
+  body.plan-open #plan{display:block}
+  body.plan-open #scrim{display:block}
+  body.plan-open #viewbar{display:none}
+  #plan .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+  #plan .ph b{font-size:16px}
+  #plan .psum{font-family:var(--mono);font-size:12px;color:var(--dim);margin:2px 0 12px}
+  ul.planlist{list-style:none;margin:0;padding:0}
+  ul.planlist li{display:grid;grid-template-columns:22px 12px 1fr auto;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid #20242e;cursor:pointer}
+  ul.planlist li .no{font-family:var(--mono);font-size:13px;color:var(--dim);text-align:center}
+  ul.planlist li .tick{width:9px;height:9px;border-radius:50%;justify-self:center}
+  ul.planlist li .nm{font-size:13.5px;font-weight:600}
+  ul.planlist li .sub{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
+  ul.planlist li .seg{font-family:var(--mono);font-size:12px;color:var(--route);text-align:right;white-space:nowrap}
+  ul.planlist li .seg small{display:block;color:var(--dim);font-size:10px}
+  #plan .pe{color:var(--dim);font-size:13px;line-height:1.5;padding:14px 2px}
+  @media(min-width:821px){
+    #plan{inset:auto auto 18px 18px;max-width:420px;border-radius:14px;border:1px solid var(--line)}
   }
 </style>
 </head>
@@ -213,6 +235,7 @@
   <span class="cat" data-cat="fuel"><span class="dot" style="background:var(--fuel)"></span>paliwo</span>
   <span class="cat" data-cat="eat"><span class="dot" style="background:var(--eat)"></span>jedzenie</span>
   <span class="chip" id="favchip">★ ulubione</span>
+  <span class="chip" id="planchip">📑 Plan</span>
   <span class="grp">do
     <select id="range">
       <option value="50">50 km</option>
@@ -238,14 +261,14 @@
 </div>
 
 <div id="controls">
-  <div id="drawerHead"><b>Opcje</b><button class="iconbtn" id="drawerClose">✕</button></div>
+  <div id="drawerHead"><button class="iconbtn" id="drawerClose" aria-label="Zamknij">✕</button></div>
 
   <div class="sec">Trasa</div>
   <label class="btn" for="file">Wczytaj trasę (.gpx)</label>
   <input id="file" type="file" accept=".gpx">
 
   <div class="sec">Punkty</div>
-  <span class="grp">od trasy
+  <span class="grp">Promień od trasy
     <select id="radius">
       <option value="100">100 m</option>
       <option value="500" selected>500 m</option>
@@ -269,6 +292,7 @@
 </div>
 
 <div id="detail"></div>
+<div id="plan"></div>
 
 <div id="scrim"></div>
 
@@ -384,7 +408,7 @@ function loadRoute(r,name){
   pois=[];pidIndex.clear();foodGaps=[];renderPOIs();document.getElementById('panel').innerHTML='';
   loadFavs(name);
   document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
-  setStatus("Trasa wczytana. Ustaw „od trasy” w ☰ i kliknij „Pobierz punkty”.");
+  setStatus("Trasa wczytana. Ustaw „Promień od trasy” w ☰ i kliknij „Pobierz punkty”.");
   persistBundle();
 }
 function drawRoute(){
@@ -499,6 +523,7 @@ window.toggleFav=function(id){
   saveFavs(); renderPOIs(); if(lastKm!=null) renderPanel();
   const p=pidIndex.get(id);
   if(p && document.body.classList.contains('detail-open')) document.getElementById('detail').innerHTML=detailHtml(p);
+  if(document.body.classList.contains('plan-open')) document.getElementById('plan').innerHTML=planHtml();
 };
 
 // ---- render POI ----
@@ -702,7 +727,13 @@ function refreshSaved(){
   const sel=document.getElementById('saved'); if(!sel) return;
   let cur=""; try{cur=localStorage.getItem("mb_last")||"";}catch(e){}
   const names=listSaved();
-  sel.innerHTML=names.length?names.map(n=>`<option ${n===cur?'selected':''} value="${esc(n)}">${esc(n)}</option>`).join(""):`<option value="">— brak —</option>`;
+  sel.innerHTML=names.length?names.map(n=>{
+    let np=0,nf=0;
+    try{const b=JSON.parse(localStorage.getItem("mb_bundle:"+n)||"{}");np=(b.pois||[]).length;}catch(e){}
+    try{const f=JSON.parse(localStorage.getItem("mb_fav:"+n)||"[]");nf=f.length;}catch(e){}
+    const lab=n+" — "+np+" pkt"+(nf?" · ★"+nf:"");
+    return `<option ${n===cur?'selected':''} value="${esc(n)}">${esc(lab)}</option>`;
+  }).join(""):`<option value="">— brak —</option>`;
 }
 document.getElementById('saved').addEventListener('change',e=>{
   const n=e.target.value; if(!n) return;
@@ -727,6 +758,35 @@ document.getElementById('favchip').addEventListener('click',()=>{
   favOnly=!favOnly; document.getElementById('favchip').classList.toggle('on',favOnly);
   renderPOIs(); if(lastKm!=null) renderPanel();
 });
+function plPlural(n){ if(n===1) return "przystanek"; const d=n%10,dd=n%100; return (d>=2&&d<=4&&!(dd>=12&&dd<=14))?"przystanki":"przystanków"; }
+function planHtml(){
+  const favs=pois.filter(p=>favorites.has(pid(p))).sort((a,b)=>a.km-b.km);
+  if(!favs.length){
+    return `<div class="ph"><b>📑 Plan przystanków</b><button class="iconbtn" onclick="closePlan()">✕</button></div>`+
+      `<div class="pe">Brak ulubionych. Dodaj miejsca gwiazdką (★) na liście albo w szczegółach — tu zbuduje się Twój plan postojów wzdłuż trasy, w kolejności kilometrów.</div>`;
+  }
+  const rows=favs.map((p,i)=>{
+    const seg = i===0 ? p.km : (p.km - favs[i-1].km);
+    const c=CATS[p.cats[0]];
+    const fromYou=(lastKm!=null)?aheadDelta(p.km,lastKm):null;
+    const youLine=(fromYou!=null)?(fromYou>0?`<small>${fromYou.toFixed(1)} km od Ciebie</small>`:`<small>za Tobą</small>`):"";
+    return `<li onclick="openFromPlan('${pid(p)}')">
+      <div class="no">${i+1}</div>
+      <div class="tick" style="background:${c.color}"></div>
+      <div><div class="nm">${esc(p.name)}</div><div class="sub">km ${p.km.toFixed(1)} · ${p.detourM} m ${p.side||""} · ${c.label.toLowerCase()}</div></div>
+      <div class="seg">+${seg.toFixed(1)}<small>${i===0?"od startu":"od poprz."}</small>${youLine}</div>
+    </li>`;
+  }).join("");
+  const span=(favs.at(-1).km-favs[0].km).toFixed(0);
+  let maxgap=0; for(let i=1;i<favs.length;i++) maxgap=Math.max(maxgap,favs[i].km-favs[i-1].km);
+  const sum=`${favs.length} ${plPlural(favs.length)} · rozpiętość ${span} km`+(favs.length>1?` · najdłuższy odcinek ${maxgap.toFixed(0)} km`:"");
+  return `<div class="ph"><b>📑 Plan przystanków</b><button class="iconbtn" onclick="closePlan()">✕</button></div>`+
+    `<div class="psum">${sum}</div><ul class="planlist">${rows}</ul>`;
+}
+function openPlan(){ document.getElementById('plan').innerHTML=planHtml(); document.body.classList.add('plan-open'); }
+window.closePlan=function(){ document.body.classList.remove('plan-open'); };
+window.openFromPlan=function(id){ closePlan(); const p=pidIndex.get(id); if(p) openDetail(p); };
+document.getElementById('planchip').addEventListener('click',openPlan);
 document.getElementById('range').addEventListener('change',()=>{if(lastKm!=null)renderPanel();});
 
 // ---- mapa: pokaż/ukryj ----
@@ -747,7 +807,7 @@ document.getElementById('hamb').addEventListener('click',()=>document.body.class
 document.getElementById('drawerClose').addEventListener('click',closeMenu);
 document.getElementById('helpBtn').addEventListener('click',()=>{closeMenu();document.body.classList.add('help-open');});
 document.getElementById('helpClose').addEventListener('click',()=>document.body.classList.remove('help-open'));
-document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');document.body.classList.remove('detail-open');});
+document.getElementById('scrim').addEventListener('click',()=>{closeMenu();document.body.classList.remove('help-open');document.body.classList.remove('detail-open');document.body.classList.remove('plan-open');});
 
 // ---- progress ----
 const progEl=document.getElementById('progress'), progFill=document.getElementById('progFill');
