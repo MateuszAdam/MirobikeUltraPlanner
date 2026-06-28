@@ -62,6 +62,7 @@ export default function App() {
   const [hereOff, setHereOff] = useState(0);
   const [gpsOn, setGpsOn] = useState(false);
   const watchId = useRef<number | null>(null);
+  const wakeLockRef = useRef<{ release?: () => Promise<void> } | null>(null);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
   const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
 
@@ -317,20 +318,26 @@ export default function App() {
     }
     if (fromGPS) checkFavAlerts(pr.km);
   }
-  function toggleGps() {
+  async function toggleGps() {
     if (watchId.current != null) {
       navigator.geolocation.clearWatch(watchId.current);
-      watchId.current = null; setGpsOn(false); setStatus("GPS zatrzymany.");
+      watchId.current = null; setGpsOn(false);
+      try { await wakeLockRef.current?.release?.(); } catch { /* ignore */ }
+      wakeLockRef.current = null;
+      setStatus("GPS zatrzymany.");
       return;
     }
-    if (!("geolocation" in navigator)) { setStatus("Brak GPS."); return; }
+    if (!("geolocation" in navigator)) { setStatus("Ta przeglądarka nie udostępnia GPS."); return; }
+    if (!route) { setStatus("Najpierw wczytaj trasę (krok 1), potem włącz GPS."); return; }
+    setGpsOn(true);
+    setStatus("Szukam pozycji GPS… zezwól na dostęp do lokalizacji.");
     try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch { /* ignore */ }
+    try { wakeLockRef.current = await (navigator as any).wakeLock?.request("screen"); } catch { /* brak wsparcia */ }
     watchId.current = navigator.geolocation.watchPosition(
       (p) => setHere(p.coords.latitude, p.coords.longitude, true, p.coords.accuracy || 0),
-      (e) => setStatus("GPS: " + e.message),
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+      (e) => { setGpsOn(false); setStatus("GPS niedostępny: " + e.message + " (wymaga HTTPS i zgody na lokalizację)."); },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 },
     );
-    setGpsOn(true); setStatus("Śledzę GPS…");
   }
   function toggleFav(id: string) {
     const n = new Set(favorites);
@@ -352,6 +359,18 @@ export default function App() {
       if (!r) { setStatus("Zaloguj się, by synchronizować."); return; }
       await refreshSaved(); setStatus(`Sync: wysłano ${r.pushed}, pobrano ${r.pulled}.`);
     } catch (e: any) { setStatus("Sync nieudany: " + e.message); }
+  }
+  async function doShare() {
+    const data = {
+      title: "MiroBike Ultra Planner",
+      text: "Planer noclegów, sklepów i postojów na trasie ultra — działa offline. Polecam!",
+      url: "https://www.mirobike.grapevest.pl/",
+    };
+    try {
+      if (navigator.share) { await navigator.share(data); return; }       // iOS/Android: natywny arkusz
+      await navigator.clipboard?.writeText(data.url);
+      setStatus("Link skopiowany: " + data.url);
+    } catch { /* użytkownik anulował */ }
   }
 
   // ---- pochodne listy ----
@@ -394,7 +413,7 @@ export default function App() {
 
       <div className="quick">
         {missing > 0 && <button className="chip refetch" disabled={fetching} onClick={() => doFetch(true)}>⬇ Dobierz brakujące ({missing})</button>}
-        <button className={"chip gps " + (gpsOn ? "on" : "")} disabled={!route} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
+        <button className={"chip gps " + (gpsOn ? "on" : "")} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
         {FILTER_CATS.map((c) => (
           <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
             <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
@@ -528,6 +547,7 @@ export default function App() {
 
         <div className="msec">Pomoc i kontakt</div>
         <button className="mbtn" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
+        <button className="mbtn" onClick={doShare}>📤 Poleć aplikację</button>
         <a className="mbtn" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
         <a className="mbtn" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt: contact@grapevest.pl</a>
       </div>
