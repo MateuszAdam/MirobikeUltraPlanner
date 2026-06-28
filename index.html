@@ -562,6 +562,23 @@ function drawRoute(){
   if(document.body.classList.contains('map-open')) fitRoute();
 }
 function fitRoute(){ if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[26,26]}); }
+// ---- stan „brak mapy" ----
+function clearLoaded(){
+  route=null; routeDS=null; routeTime=null; routeAscent=0;
+  pois=[]; pidIndex.clear(); foodGaps=[];
+  favorites=new Set(); favAlerted=new Map();
+  lastKm=null; lastOff=0; selPid=null; fetchState=null;
+  if(routeLine){ routeLine.remove(); routeLine=null; }
+  if(kmLayer) kmLayer.clearLayers();
+  if(poiLayer) poiLayer.clearLayers();
+  if(hereMarker){ hereMarker.remove(); hereMarker=null; }
+  if(hereAcc){ hereAcc.remove(); hereAcc=null; }
+  document.getElementById('trackname').textContent="— brak trasy —";
+  const fb=document.getElementById('fetch'); fb.disabled=true; fb.textContent="Pobierz miejsca";
+  document.getElementById('gps').disabled=true;
+  document.getElementById('export').disabled=true;
+  renderGuide(); updateHeader();
+}
 
 // ---- ładowanie punktów ----
 document.getElementById('jsonfile').addEventListener('change',ev=>{
@@ -1058,10 +1075,10 @@ document.getElementById('del').addEventListener('click',()=>{
   try{
     localStorage.removeItem("mb_bundle:"+cur);
     localStorage.removeItem("mb_fav:"+cur);
-    if((localStorage.getItem("mb_last")||"")===cur) localStorage.removeItem("mb_last");
+    localStorage.removeItem("mb_last");
   }catch(e){}
-  refreshSaved(); if(lastKm==null) renderGuide();
-  setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
+  clearLoaded(); refreshSaved();
+  setStatus("Usunięto „"+cur+"”. Brak wczytanej mapy — wczytaj trasę (krok 1).");
 });
 document.getElementById('rename').addEventListener('click',()=>{
   const sel=document.getElementById('saved');
@@ -1174,10 +1191,8 @@ setMapOpen(!window.matchMedia("(max-width:820px)").matches);
 (function boot(){
   let lastName=null, raw=null;
   try{ lastName=localStorage.getItem("mb_last"); if(lastName) raw=localStorage.getItem("mb_bundle:"+lastName); }catch(e){}
-  if(raw){ try{ loadBundle(JSON.parse(raw),true); setStatus("Zapisana trasa offline: "+lastName); }catch(e){ if(window.BUNDLE) loadBundle(window.BUNDLE); } }
-  else if(window.BUNDLE){ try{ loadBundle(window.BUNDLE); }catch(e){ setStatus("Błąd miejsc: "+e.message); } }
-  else setStatus("Zacznij od kroku 1 — wczytaj trasę (.gpx).");
-  if(lastKm==null) renderGuide();
+  if(raw){ try{ loadBundle(JSON.parse(raw),true); setStatus("Zapisana trasa offline: "+lastName); }catch(e){ clearLoaded(); setStatus("Zacznij od kroku 1 — wczytaj trasę (.gpx)."); } }
+  else { clearLoaded(); setStatus("Zacznij od kroku 1 — wczytaj trasę (.gpx)."); }
   refreshSaved();
 })();
 
