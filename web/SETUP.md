@@ -33,13 +33,20 @@ VITE_SUPABASE_ANON_KEY=<anon key>
 VITE_PMTILES_URL=https://<twój-cdn>/poland.pmtiles
 ```
 
-### 3. Mapa offline (PMTiles)
-1. Pobierz wycinek (np. Polska) jako PMTiles:
-   - gotowe buildy: https://maps.protomaps.com/builds/ (plik `.pmtiles`), albo
-   - własny wycinek: `pmtiles extract <planet.pmtiles> poland.pmtiles --bbox=14.0,49.0,24.2,54.9`
-2. Wrzuć plik na **Cloudflare R2** / publiczny bucket z obsługą **HTTP Range** (R2 obsługuje).
-3. Ustaw `VITE_PMTILES_URL` na publiczny URL pliku.
-> Bez tego mapa używa demo MapLibre (online) — działa, ale nie offline i nie do produkcji.
+### 3. Mapa offline (PMTiles)  ⚠️ wymaga R2 (plik za duży na Vercel/git)
+Gotowy skrypt z **buforem granicznym** (trasy przy granicy PL): `web/scripts/build-pmtiles.sh`.
+1. Pobierz binarkę `pmtiles` (Go): https://github.com/protomaps/go-pmtiles/releases (dodaj do PATH).
+2. Uruchom (z katalogu `web`):
+   ```bash
+   MAXZOOM=14 ./scripts/build-pmtiles.sh
+   # tworzy poland-border.pmtiles, bbox 13.4,48.5,24.8,55.4 (Polska + ~50 km bufor)
+   ```
+   **Zmierzone rozmiary:** maxzoom=10 ≈ **135 MB**; detal ulic (z13–14) → setki MB.
+3. Wrzuć plik na **Cloudflare R2** (publiczny bucket, obsługuje HTTP Range). Ustaw `VITE_PMTILES_URL` na jego URL.
+
+> Dlaczego nie Vercel/git? GitHub odrzuca pliki >100 MB, a sensowny detal Polski to >100 MB.
+> Na `web/public/` (Vercel) zmieści się tylko bardzo niski zoom (≤8, bez ulic). Stąd R2.
+> Bez `VITE_PMTILES_URL` mapa używa demo MapLibre (online) — działa, ale nie offline.
 
 ### 4. Vercel (hosting)
 1. New Project → import repo `MirobikeUltraPlanner`.
