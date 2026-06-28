@@ -373,12 +373,12 @@
 <script>
 const CATS = {
   food:  {label:"Spożywcze", color:css('--food'),
-          match:t=>["supermarket","convenience","grocery","greengrocer","bakery","general","deli","butcher","farm"].includes(t.shop)},
+          match:t=>["supermarket","convenience","grocery","greengrocer","bakery","general","deli","butcher","farm","kiosk","health_food","pastry","confectionery","beverages","dairy","frozen_food","seafood","cheese","food","department_store"].includes(t.shop)||t.amenity==="marketplace"},
   sleep: {label:"Nocleg", color:css('--sleep'),
-          match:t=>["hotel","guest_house","hostel","motel","apartment","chalet","camp_site","caravan_site","alpine_hut","wilderness_hut"].includes(t.tourism)},
+          match:t=>["hotel","guest_house","hostel","motel","apartment","chalet","camp_site","caravan_site","alpine_hut","wilderness_hut"].includes(t.tourism)||t.building==="hotel"},
   fuel:  {label:"Paliwo", color:css('--fuel'), match:t=>t.amenity==="fuel"},
   eat:   {label:"Jedzenie", color:css('--eat'),
-          match:t=>["restaurant","cafe","fast_food","bar","pub","food_court","ice_cream"].includes(t.amenity)},
+          match:t=>["restaurant","cafe","fast_food","bar","pub","food_court","ice_cream","biergarten","canteen"].includes(t.amenity)},
 };
 const ORDER=["food","fuel","eat","sleep"];
 const OVERPASS=[
@@ -578,10 +578,12 @@ async function fetchPOIs(){
   const btn=document.getElementById('fetch'); btn.disabled=true; closeMenu();
   const rOther=R(), rSleep=Math.max(R(),5000); const filters=[];
   // noclegi: zawsze do 5 km (warto nadłożyć); pozostałe wg promienia (domyślnie 500 m)
-  if(active.has("food"))  filters.push({q:'nw["shop"~"^(supermarket|convenience|grocery|greengrocer|bakery|general|deli|butcher|farm)$"]',r:rOther});
-  if(active.has("sleep")) filters.push({q:'nw["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]',r:rSleep});
-  if(active.has("fuel"))  filters.push({q:'nw["amenity"~"^(fuel)$"]',r:rOther});
-  if(active.has("eat"))   filters.push({q:'nw["amenity"~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream)$"]',r:rOther});
+  if(active.has("food")){ filters.push({q:'nwr["shop"~"^(supermarket|convenience|grocery|greengrocer|bakery|general|deli|butcher|farm|kiosk|health_food|pastry|confectionery|beverages|dairy|frozen_food|seafood|cheese|food|department_store)$"]',r:rOther});
+                           filters.push({q:'nwr["amenity"="marketplace"]',r:rOther}); }
+  if(active.has("sleep")){ filters.push({q:'nwr["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]',r:rSleep});
+                           filters.push({q:'nwr["building"="hotel"]',r:rSleep}); }
+  if(active.has("fuel"))  filters.push({q:'nwr["amenity"="fuel"]',r:rOther});
+  if(active.has("eat"))   filters.push({q:'nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten|canteen)$"]',r:rOther});
   const key=rOther+"|"+[...active].sort().join(",");
   if(!fetchState||fetchState.key!==key){
     const q=downsample(route,1500);const c=[];for(let i=0;i<q.lat.length;i++)c.push(q.lat[i]+","+q.lon[i]);
