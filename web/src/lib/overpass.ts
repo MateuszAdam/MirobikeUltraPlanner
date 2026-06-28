@@ -13,6 +13,9 @@ const FILTERS: Record<CatKey, { q: string } | null> = {
   sleep: { q: 'nwr["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]' },
   fuel: { q: 'nwr["amenity"="fuel"]' },
   eat: { q: 'nwr["amenity"~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream|biergarten|canteen)$"]' },
+  water: { q: 'nwr["amenity"~"^(drinking_water|water_point)$"]' },
+  bike: { q: 'nwr["shop"="bicycle"]' },
+  pharmacy: { q: 'nwr["amenity"="pharmacy"]' },
   spot: null,
 };
 
@@ -74,6 +77,11 @@ function buildSession(route: Route, opts: FetchOptions): FetchSession {
   const filters = active.map((c) => ({ q: FILTERS[c]!.q, r: c === "sleep" ? rSleep : rOther }));
   if (opts.cats.has("food")) filters.push({ q: 'nwr["amenity"="marketplace"]', r: rOther });
   if (opts.cats.has("sleep")) filters.push({ q: 'nwr["building"="hotel"]', r: rSleep });
+  if (opts.cats.has("water")) {
+    filters.push({ q: 'nwr["man_made"~"^(water_tap|water_well)$"]', r: rOther });
+    filters.push({ q: 'nwr["natural"="spring"]["drinking_water"!="no"]', r: rOther });
+  }
+  if (opts.cats.has("bike")) filters.push({ q: 'nwr["amenity"="bicycle_repair_station"]', r: rOther });
 
   const q = downsample(route, 1500);
   const coords: string[] = [];

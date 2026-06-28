@@ -1,6 +1,7 @@
 :root {
   --ink: #14161b; --ink2: #1c1f27; --line: #2b303b; --txt: #e9ecf1; --dim: #9aa3b2;
   --food: #3ec98a; --sleep: #7c8cff; --fuel: #f5a623; --eat: #ff6b6b; --spot: #c77dff;
+  --water: #38bdf8; --bike: #9aa3b2; --pharmacy: #ff5a8a;
   --here: #ffd23f; --fav: #ffd23f; --warn: #ff5a5a;
   --route: #19e0d6; --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;

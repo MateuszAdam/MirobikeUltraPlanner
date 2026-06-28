@@ -16,9 +16,11 @@ import type { CatKey, DownRoute, FoodGap, Poi, Route } from "./lib/types";
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 
 const CAT_COLOR: Record<CatKey, string> = {
-  food: "#3ec98a", sleep: "#7c8cff", fuel: "#f5a623", eat: "#ff6b6b", spot: "#c77dff",
+  food: "#3ec98a", sleep: "#7c8cff", fuel: "#f5a623", eat: "#ff6b6b",
+  water: "#38bdf8", bike: "#9aa3b2", pharmacy: "#ff5a8a", spot: "#c77dff",
 };
-const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat"];
+const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
+const FETCH_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 
 function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Feature {
   const pts: number[][] = [];
@@ -122,7 +124,7 @@ export default function App() {
         id: "pois", type: "circle", source: "pois",
         paint: {
           "circle-radius": ["case", ["get", "fav"], 7, 5], "circle-stroke-width": 1, "circle-stroke-color": "#0c0d10",
-          "circle-color": ["match", ["get", "cat"], "food", CAT_COLOR.food, "sleep", CAT_COLOR.sleep, "fuel", CAT_COLOR.fuel, "eat", CAT_COLOR.eat, "spot", CAT_COLOR.spot, "#999"],
+          "circle-color": ["match", ["get", "cat"], "food", CAT_COLOR.food, "sleep", CAT_COLOR.sleep, "fuel", CAT_COLOR.fuel, "eat", CAT_COLOR.eat, "water", CAT_COLOR.water, "bike", CAT_COLOR.bike, "pharmacy", CAT_COLOR.pharmacy, "spot", CAT_COLOR.spot, "#999"],
         },
       });
       m.on("click", "pois", (e) => {
@@ -226,7 +228,7 @@ export default function App() {
     try {
       const res = await fetchPois(
         route,
-        { cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: fetchRadius, onProgress: (done, total, found) => setProgress({ done, total, found }) },
+        { cats: new Set<CatKey>(FETCH_CATS), radiusOther: fetchRadius, onProgress: (done, total, found) => setProgress({ done, total, found }) },
         resume ? fetchSessionRef.current ?? undefined : undefined,
       );
       fetchSessionRef.current = res.session;

@@ -32,10 +32,17 @@ export const CATS: Record<CatKey, CatDef> = {
   },
   fuel: { label: "Paliwo", cssVar: "--fuel", match: (t) => t.amenity === "fuel" },
   eat: { label: "Jedzenie", cssVar: "--eat", match: (t) => EAT_AMENITY.includes(t.amenity) },
+  water: {
+    label: "Woda", cssVar: "--water",
+    match: (t) => t.amenity === "drinking_water" || t.amenity === "water_point" || t.man_made === "water_tap" || t.man_made === "water_well" || t.natural === "spring",
+  },
+  bike: { label: "Rower", cssVar: "--bike", match: (t) => t.shop === "bicycle" || t.amenity === "bicycle_repair_station" },
+  pharmacy: { label: "Apteka", cssVar: "--pharmacy", match: (t) => t.amenity === "pharmacy" },
   spot: { label: "Własne", cssVar: "--spot", match: () => false },
 };
 
-export const ORDER: CatKey[] = ["food", "fuel", "eat", "sleep"];
+// Kolejność w wierszu „następne wg kategorii" (woda ważna w ultra).
+export const ORDER: CatKey[] = ["food", "water", "fuel", "eat", "sleep"];
 
 /** Zgaduje kategorię importowanego punktu z nazwy/opisu. */
 export function inferCat(s: string): CatKey {

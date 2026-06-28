@@ -1,6 +1,6 @@
 // Domenowe typy aplikacji (współdzielone przez logikę, UI i sync).
 
-export type CatKey = "food" | "sleep" | "fuel" | "eat" | "spot";
+export type CatKey = "food" | "sleep" | "fuel" | "eat" | "water" | "bike" | "pharmacy" | "spot";
 export type Side = "L" | "P" | "";
 
 export interface RoutePoint {
