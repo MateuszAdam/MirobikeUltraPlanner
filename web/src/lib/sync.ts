@@ -18,6 +18,13 @@ export async function getUser() {
   return data.user ?? null;
 }
 
+/** Nasłuch zmian sesji (np. powrót z magic-linka). Zwraca funkcję odpinającą. */
+export function onAuthChange(cb: (email: string | null) => void): () => void {
+  if (!isSupabaseConfigured()) return () => {};
+  const { data } = getSupabase().auth.onAuthStateChange((_e, session) => cb(session?.user?.email ?? null));
+  return () => data.subscription.unsubscribe();
+}
+
 export async function signInWithEmail(email: string): Promise<void> {
   await getSupabase().auth.signInWithOtp({
     email,

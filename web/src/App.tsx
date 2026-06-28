@@ -6,18 +6,19 @@ import { downsample, project, pid } from "./lib/geo";
 import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS } from "./lib/categories";
-import { parseImport } from "./lib/importPlaces";
 import { aheadList, nextShop, gapBeforeStretch, planRows, plPlural, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
-import { getUser, signInWithEmail, signOut, syncNow } from "./lib/sync";
+import { getUser, signInWithEmail, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
 import type { CatKey, DownRoute, FoodGap, Poi, Route } from "./lib/types";
+
+const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 
 const CAT_COLOR: Record<CatKey, string> = {
   food: "#3ec98a", sleep: "#7c8cff", fuel: "#f5a623", eat: "#ff6b6b", spot: "#c77dff",
 };
-const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "spot"];
+const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat"];
 
 function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Feature {
   const pts: number[][] = [];
@@ -67,7 +68,9 @@ export default function App() {
   const [detail, setDetail] = useState<Poi | null>(null);
   const [showPlan, setShowPlan] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [mapView, setMapView] = useState<"list" | "map">("list");
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [saved, setSaved] = useState<StoredBundle[]>([]);
   const [status, setStatus] = useState("Wczytaj trasę (.gpx), aby zacząć.");
   const [fetching, setFetching] = useState(false);
@@ -140,7 +143,20 @@ export default function App() {
   useEffect(() => {
     ensurePersistence();
     refreshSaved();
-    if (isSupabaseConfigured()) getUser().then((u) => setUserEmail(u?.email ?? null));
+    if (!isSupabaseConfigured()) return;
+    getUser().then((u) => setUserEmail(u?.email ?? null));
+    // Po zalogowaniu (też powrót z magic-linka) auto-pobierz trasy z chmury do offline.
+    const off = onAuthChange(async (mail) => {
+      setUserEmail(mail);
+      if (!mail) return;
+      try {
+        const r = await syncNow();
+        await refreshSaved();
+        if (r && r.pulled) setStatus(`Zalogowano. Pobrano ${r.pulled} tras do pamięci offline.`);
+        else setStatus("Zalogowano. Trasy zsynchronizowane.");
+      } catch { /* offline — zsynchronizuje się później */ }
+    });
+    return off;
   }, [refreshSaved]);
 
   // przy przełączeniu na mapę: dopasuj rozmiar i dośrodkuj na mojej pozycji
@@ -213,39 +229,32 @@ export default function App() {
       );
       fetchSessionRef.current = res.session;
       setPois(res.pois); setGaps(computeGaps(res.pois)); setMissing(res.failed);
+      await persistLocal(res.pois, favorites);
       setStatus(res.failed > 0
-        ? `${res.pois.length} miejsc. ${res.failed} paczek nie pobrano — kliknij „Dobierz brakujące".`
-        : `${res.pois.length} miejsc. Zapisz offline, włącz GPS lub dotknij mapy.`);
+        ? `${res.pois.length} miejsc — zapisane offline. ${res.failed} paczek nie pobrano: „Dobierz brakujące".`
+        : `${res.pois.length} miejsc — zapisane offline. Włącz GPS lub dotknij mapy.`);
     } catch (e: any) { setStatus("Błąd pobierania: " + e.message); }
     finally { setFetching(false); setProgress(null); }
   }
-  async function onImport(file: File) {
-    if (!route || !ds) { setStatus("Najpierw wczytaj trasę."); return; }
-    try {
-      const list = parseImport(await file.text(), file.name);
-      if (!list.length) { setStatus("Nie znalazłem miejsc w pliku."); return; }
-      const idx = new Map(pois.map((p) => [pid(p), p]));
-      let added = 0;
-      for (const it of list) {
-        const pr = project(ds, it.lat, it.lon);
-        const np: Poi = { name: it.name, cats: [CATS[it.cat] ? it.cat : "spot"], lat: it.lat, lon: it.lon, km: pr.km, detourM: pr.detourM, side: pr.side, tags: { _custom: "1", ...(it.desc ? { description: it.desc } : {}) } };
-        const id = pid(np);
-        if (idx.has(id)) continue;
-        idx.set(id, np); added++;
-      }
-      const next = [...idx.values()].sort((a, b) => a.km - b.km);
-      setPois(next); setGaps(computeGaps(next));
-      setStatus(`Dodano ${added} własnych miejsc. Razem ${next.length}.`);
-    } catch (e: any) { setStatus("Błąd importu: " + e.message); }
+  // Po lokalnym zapisie — jeśli zalogowany, wyślij zmiany do chmury (z opóźnieniem).
+  function pushSoon() {
+    if (!isSupabaseConfigured()) return;
+    clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(async () => {
+      const u = await getUser();
+      if (!u) return;
+      try { await pushDirty(u.id); await refreshSaved(); } catch { /* offline — pójdzie później */ }
+    }, 2000);
   }
-  async function saveCurrent() {
+  // Auto-zapis offline (IndexedDB) — bez przycisku, dane trzymają się same.
+  async function persistLocal(poiList: Poi[], favSet: Set<string>) {
     if (!route || !name) return;
-    const bundle = buildBundle(name, route, pois, gaps);
+    const bundle = buildBundle(name, route, poiList, computeGaps(poiList));
     const now = new Date().toISOString();
     bundle.updated_at = now;
-    await putBundle({ name, bundle, favorites: [...favorites], updated_at: now, dirty: true });
+    await putBundle({ name, bundle, favorites: [...favSet], updated_at: now, dirty: true });
     await refreshSaved();
-    setStatus(`Zapisano „${name}" offline${userEmail ? " — kliknij Sync, by wysłać na konto" : ""}.`);
+    pushSoon();
   }
   async function loadSaved(n: string) {
     const sb = await db.bundles.get(n);
@@ -324,7 +333,10 @@ export default function App() {
     setGpsOn(true); setStatus("Śledzę GPS…");
   }
   function toggleFav(id: string) {
-    setFavorites((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    const n = new Set(favorites);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setFavorites(n);
+    persistLocal(pois, n);
   }
   function toggleCat(c: CatKey) {
     setActive((prev) => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
@@ -362,6 +374,7 @@ export default function App() {
   );
 
   const guideStep = !route ? 1 : !pois.length ? 2 : 3;
+  const savedEntry = saved.find((s) => s.name === name);
 
   return (
     <div className="layout">
@@ -487,30 +500,36 @@ export default function App() {
 
         <div className="msec">Miejsca</div>
         <button className="mbtn go" disabled={!route || fetching} onClick={() => { doFetch(); setMenuOpen(false); }}>{fetching ? "Pobieram…" : "⬇ Pobierz miejsca"}</button>
-        <label className="mbtn"><input hidden type="file" accept=".kml,.gpx,.csv,.txt" onChange={(e) => { if (e.target.files?.[0]) { onImport(e.target.files[0]); setMenuOpen(false); } }} />➕ Dodaj własne (KML/GPX/CSV)</label>
-        <button className="mbtn" disabled={!route} onClick={saveCurrent}>💾 Zapisz offline</button>
+        {savedEntry && <div className="mnote">💾 Zapisane offline ({savedEntry.bundle.pois.length} miejsc){savedEntry.dirty ? " · do wysłania" : userEmail ? " · w chmurze" : ""}</div>}
 
         <div className="msec">Zapisane offline</div>
         <select className="mbtn" value="" onChange={(e) => { if (e.target.value) { loadSaved(e.target.value); setMenuOpen(false); } }}>
           <option value="">Wczytaj zapisaną…</option>
           {saved.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.bundle.pois.length} miejsc{s.dirty ? " *" : ""}</option>)}
         </select>
-        {name && saved.some((s) => s.name === name) && <>
+        {name && savedEntry && <>
           <button className="mbtn" onClick={() => renameSaved(name)}>✏ Zmień nazwę</button>
           <button className="mbtn" onClick={() => removeSaved(name)}>🗑 Usuń bieżącą</button>
         </>}
 
         {isSupabaseConfigured() && <>
-          <div className="msec">Konto</div>
+          <div className="msec">Konto (opcjonalne)</div>
           {userEmail ? <>
             <div className="mnote">{userEmail}</div>
-            <button className="mbtn" onClick={doSync}>⟳ Synchronizuj</button>
+            <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
+            <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
             <button className="mbtn" onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button>
           </> : <>
-            <input className="mbtn" placeholder="e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <button className="mbtn" onClick={login}>Zaloguj (link na e-mail)</button>
+            <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła — dostajesz link), by przygotować trasy na komputerze i mieć je offline na telefonie.</div>
+            <input className="mbtn" placeholder="twój e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <button className="mbtn go" onClick={login}>✉ Wyślij link logowania</button>
           </>}
         </>}
+
+        <div className="msec">Pomoc i kontakt</div>
+        <button className="mbtn" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
+        <a className="mbtn" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
+        <a className="mbtn" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt: contact@grapevest.pl</a>
       </div>
 
       {detail && (
@@ -560,6 +579,24 @@ export default function App() {
                 </ul>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {showHelp && (
+        <div className="sheet" onClick={() => setShowHelp(false)}>
+          <div className="card" onClick={(e) => e.stopPropagation()}>
+            <div className="dh"><b>Jak korzystać</b><button onClick={() => setShowHelp(false)}>✕</button></div>
+            <ol className="help">
+              <li><b>Trasa.</b> ☰ → „Wczytaj trasę (.gpx)" — ślad Twojego wyścigu.</li>
+              <li><b>Pobierz miejsca.</b> ☰ → „Pobierz miejsca" — noclegi, sklepy, jedzenie i paliwo wzdłuż trasy. Zapisują się <b>automatycznie offline</b>.</li>
+              <li><b>Filtry.</b> U góry włączasz/wyłączasz kategorie oraz ★ ulubione.</li>
+              <li><b>Pozycja.</b> „📍 Śledź GPS" na rowerze albo dotknij mapy. Lista „przede mną" pokaże, co masz dalej i za ile (⏱ czas dojazdu).</li>
+              <li><b>Plan.</b> Oznacz miejsca gwiazdką (★) → „📑 Plan" ułoży postoje wzdłuż trasy.</li>
+              <li><b>Konto (opcja).</b> Zaloguj się mailem na komputerze i telefonie — przygotujesz trasy na PC i pobierzesz je offline na telefon.</li>
+              <li><b>Offline.</b> Wszystko działa bez sieci w terenie. Dodaj apkę do ekranu początkowego (Udostępnij → „Do ekranu początkowego").</li>
+            </ol>
+            <button className="favbig" onClick={() => setShowHelp(false)}>Rozumiem</button>
           </div>
         </div>
       )}
