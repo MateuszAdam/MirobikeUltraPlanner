@@ -31,10 +31,18 @@
   /* header */
   header{display:flex;align-items:center;gap:11px;padding:calc(10px + var(--sat)) 14px 10px;border-bottom:1px solid var(--line)}
   header img.logo{width:28px;height:28px;border-radius:8px;display:block}
+  header .brand{display:flex;align-items:center;gap:11px;background:none;border:none;padding:0;cursor:pointer;color:inherit;flex:0 0 auto}
   header .word b{font-size:15px;font-weight:800}
   header .word span{font-size:11px;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;margin-left:6px}
-  header .hchips{display:flex;gap:7px;align-items:center}
+  header .hchips{display:flex;gap:7px;align-items:center;flex:0 0 auto}
   header .spacer{flex:1}
+  .hstate{flex:0 1 auto;min-width:0;font-size:11px;font-weight:700;padding:5px 9px;border-radius:999px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+  .hstate.ok{background:#13311f;color:#7ef0b0;border:1px solid #1f5a39}
+  .hstate.warn{background:#3a2410;color:#ffd08a;border:1px solid #6b4a1f}
+  .fetchdot{display:none;flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--route)}
+  body.fetching .fetchdot{display:inline-block;animation:pulse 1.1s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 #19e0d6bb}70%{box-shadow:0 0 0 9px #19e0d600}100%{box-shadow:0 0 0 0 #19e0d600}}
   .iconbtn{background:#232732;border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:8px 11px;font-size:15px;cursor:pointer;line-height:1}
   #mapBtn{background:var(--route);color:#04201e;border-color:transparent;font-weight:700;font-size:12px;padding:9px 13px}
   #mapBtn.on{background:#232732;color:var(--txt);border:1px solid var(--line);font-weight:600}
@@ -197,7 +205,7 @@
     body{grid-template-rows:auto auto auto auto 1fr}
     #hamb{display:inline-flex}
     header{gap:8px;padding-left:10px;padding-right:10px}
-    header .word span{display:none}
+    header .word{display:none}
     header .name{display:none}
     header .hchips{gap:6px;margin-left:auto}
     header .hchips .chip{font-size:12px;padding:7px 10px}
@@ -261,8 +269,12 @@
 
 <header>
   <button id="hamb" class="iconbtn" aria-label="Opcje">☰</button>
-  <img class="logo" src="logo.svg" alt="">
-  <div class="word"><b>MiroBike</b><span>Twój Ultra Planner</span></div>
+  <button id="home" class="brand" title="Pulpit" aria-label="Pulpit">
+    <img class="logo" src="logo.svg" alt="">
+    <div class="word"><b>MiroBike</b><span>Twój Ultra Planner</span></div>
+  </button>
+  <span id="hstate" class="hstate warn" title="Pulpit">⚠ brak trasy</span>
+  <span id="fetchdot" class="fetchdot" aria-hidden="true"></span>
   <span class="hchips">
     <span class="chip" id="favchip">★ Ulubione</span>
     <span class="chip" id="planchip">📑 Plan</span>
@@ -854,8 +866,25 @@ function setHere(lat,lon,fromGPS){
 }
 function aheadDelta(km,cur){let d=km-cur;if(d<-0.05&&route.isLoop)d+=route.totalM/1000;return d;}
 
+// ---- nagłówek: wskaźnik stanu + pulpit ----
+function updateHeader(){
+  const el=document.getElementById('hstate'); if(!el) return;
+  if(!route){ el.className="hstate warn"; el.textContent="⚠ brak trasy"; return; }
+  const nm=document.getElementById('trackname').textContent.split(" · ")[0];
+  const km=(route.totalM/1000).toFixed(0);
+  el.className="hstate ok";
+  el.textContent = pois.length ? `✓ ${nm} · ${pois.length} miejsc` : `✓ ${nm} · ${km} km — pobierz miejsca`;
+}
+function goHome(){
+  closeMenu();
+  document.body.classList.remove('help-open','detail-open','plan-open','support-open');
+  if(window.matchMedia("(max-width:820px)").matches) setMapOpen(false);
+  const panel=document.getElementById('panel'); if(panel) panel.scrollTop=0;
+}
+
 // ---- przewodnik krokowy (widoczny dopóki nie ma pozycji) ----
 function renderGuide(){
+  updateHeader();
   const panel=document.getElementById('panel'); if(!panel) return;
   const hasRoute=!!route, nPlaces=pois.length;
   const name=hasRoute?document.getElementById('trackname').textContent:"";
@@ -885,6 +914,7 @@ function renderGuide(){
 }
 
 function renderPanel(){
+  updateHeader();
   const cur=lastKm, total=route.totalM/1000, rg=rangeM()/1000;
   const panel=document.getElementById('panel');
   const offNote=lastOff>250?`<span style="color:var(--warn)"> · ${lastOff} m od trasy (poza?)</span>`:` · ${lastOff} m od trasy`;
@@ -1116,6 +1146,8 @@ document.querySelectorAll('#viewbar button').forEach(b=>b.addEventListener('clic
 function openMenu(){document.body.classList.add('menu-open');}
 function closeMenu(){document.body.classList.remove('menu-open');}
 document.getElementById('hamb').addEventListener('click',()=>document.body.classList.toggle('menu-open'));
+document.getElementById('home').addEventListener('click',goHome);
+document.getElementById('hstate').addEventListener('click',goHome);
 document.getElementById('drawerClose').addEventListener('click',closeMenu);
 document.getElementById('helpBtn').addEventListener('click',()=>{closeMenu();document.body.classList.add('help-open');});
 document.getElementById('helpClose').addEventListener('click',()=>document.body.classList.remove('help-open'));
@@ -1127,8 +1159,8 @@ document.getElementById('scrim').addEventListener('click',()=>{closeMenu();docum
 
 // ---- progress ----
 const progEl=document.getElementById('progress'), progFill=document.getElementById('progFill');
-function progShow(){progEl.classList.add('on');}
-function progHide(){progEl.classList.remove('on');progFill.style.width='0%';}
+function progShow(){progEl.classList.add('on');document.body.classList.add('fetching');}
+function progHide(){progEl.classList.remove('on');progFill.style.width='0%';document.body.classList.remove('fetching');}
 function progSet(done,total){progFill.style.width=(total?Math.round(done/total*100):0)+'%';}
 
 function esc(s){return (s||"").replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
