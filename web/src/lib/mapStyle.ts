@@ -30,6 +30,24 @@ export function buildStyle(): maplibregl.StyleSpecification | string {
       layers: layers("protomaps", "light", "pl"),
     } as maplibregl.StyleSpecification;
   }
-  // Brak PMTiles → demo (tylko do developmentu; nie do produkcji offline).
-  return "https://demotiles.maplibre.org/style.json";
+  // Brak PMTiles → standardowy OSM raster (jak w starej apce; ładny i znajomy).
+  // Uwaga: do produkcji na większą skalę docelowo PMTiles (polityka kafelków OSM).
+  return {
+    version: 8,
+    glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+    sources: {
+      osm: {
+        type: "raster",
+        tiles: [
+          "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        ],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: "© OpenStreetMap contributors",
+      },
+    },
+    layers: [{ id: "osm", type: "raster", source: "osm" }],
+  } as maplibregl.StyleSpecification;
 }
