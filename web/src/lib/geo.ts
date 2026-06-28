@@ -48,8 +48,12 @@ export interface Projection {
   side: Side;
 }
 
-/** Rzutuje punkt na trasę: zwraca kilometraż, odległość w bok i stronę (L/P). */
-export function project(d: DownRoute, plat: number, plon: number): Projection {
+/**
+ * Rzutuje punkt na trasę: zwraca kilometraż, odległość w bok i stronę (L/P).
+ * `win` ogranicza wyszukiwanie do okna ±winKm wokół znanego km (anty-„teleport" na
+ * pętlach/lollipopach). Gdy brak trafienia (best>3 km), wraca do wyszukiwania globalnego.
+ */
+export function project(d: DownRoute, plat: number, plon: number, win?: { km: number; winKm: number }): Projection {
   let best = Infinity;
   let bk = 0;
   let bside: Side = "";
@@ -58,6 +62,11 @@ export function project(d: DownRoute, plat: number, plon: number): Projection {
   const px = plon * kx;
   const py = plat * ky;
   for (let i = 0; i < d.lat.length - 1; i++) {
+    if (win) {
+      const c0 = d.cum[i] / 1000;
+      const c1 = d.cum[i + 1] / 1000;
+      if (Math.abs(c0 - win.km) > win.winKm && Math.abs(c1 - win.km) > win.winKm) continue;
+    }
     const ax = d.lon[i] * kx;
     const ay = d.lat[i] * ky;
     const bx = d.lon[i + 1] * kx;
@@ -76,6 +85,7 @@ export function project(d: DownRoute, plat: number, plon: number): Projection {
       bside = dx * (py - ay) - dy * (px - ax) > 0 ? "L" : "P";
     }
   }
+  if (win && (best === Infinity || best > 3000)) return project(d, plat, plon); // fallback globalny
   return { km: bk / 1000, detourM: Math.round(best), side: bside };
 }
 

@@ -37,7 +37,20 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [pts] } };
 }
 
-function notify(title: string, body: string) {
+let audioCtx: AudioContext | null = null;
+function beep() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || (window as any).webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = 880; g.gain.value = 0.08;
+    o.start(); o.stop(audioCtx.currentTime + 0.18);
+  } catch { /* brak Web Audio */ }
+}
+/** Alert „glanceable" — wibracja + beep (działa na pierwszym planie), notyfikacja jako bonus. */
+function rideAlert(title: string, body: string) {
+  try { navigator.vibrate?.([180, 80, 180]); } catch { /* ignore */ }
+  beep();
   try {
     if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body });
   } catch { /* ignore */ }
@@ -66,6 +79,7 @@ export default function App() {
   const [hereOff, setHereOff] = useState(0);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
   const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
+  const smoothRef = useRef<{ lat: number; lon: number } | null>(null);
 
   const [detail, setDetail] = useState<Poi | null>(null);
   const [showPlan, setShowPlan] = useState(false);
@@ -308,15 +322,30 @@ export default function App() {
       const th = crossedThreshold(delta, set);
       if (th != null) {
         set.add(th);
-        notify(`★ ${p.name}`, `za ${delta.toFixed(1)} km (${CATS[p.cats[0]].label.toLowerCase()})`);
+        rideAlert(`★ ${p.name}`, `za ${delta.toFixed(1)} km (${CATS[p.cats[0]].label.toLowerCase()})`);
         setStatus(`🔔 ★ ${p.name} — za ${delta.toFixed(1)} km`);
       }
     }
   }
   function setHere(lat: number, lon: number, fromGPS = false, accuracy = 0) {
-    if (!ds) { setStatus("Najpierw wczytaj trasę."); return; }
-    const pr = project(ds, lat, lon);
-    setHereKm(pr.km); setHereOff(pr.detourM);
+    if (!ds || !route) { setStatus("Najpierw wczytaj trasę."); return; }
+    if (fromGPS) {
+      if (accuracy > 80) { setStatus(`Słaby sygnał GPS (±${Math.round(accuracy)} m) — czekam na lepszy fix.`); return; }
+      const s = smoothRef.current; // lekki low-pass na pozycji
+      if (s) { lat = s.lat * 0.6 + lat * 0.4; lon = s.lon * 0.6 + lon * 0.4; }
+      smoothRef.current = { lat, lon };
+    } else {
+      smoothRef.current = null; // tapnięcie w mapę = świadomy skok, bez wygładzania
+    }
+    // okno ±4 km wokół ostatniego km (anty-„teleport" na pętli); pierwszy fix = globalnie
+    const win = fromGPS && hereKm != null ? { km: hereKm, winKm: 4 } : undefined;
+    const pr = project(ds, lat, lon, win);
+    let km = pr.km;
+    if (fromGPS && hereKm != null && !route.isLoop) {
+      const back = hereKm - km;
+      if (back > 0 && back < 0.5) km = hereKm; // drobny jitter nie cofa licznika
+    }
+    setHereKm(km); setHereOff(pr.detourM);
     hereLLRef.current = { lat, lon };
     const m = map.current;
     (m?.getSource("here") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lon, lat] } });
@@ -328,7 +357,7 @@ export default function App() {
       if (m.getZoom() < 13) m.flyTo({ center: [lon, lat], zoom: 14, duration: 600 });
       else m.panTo([lon, lat], { duration: 500 });
     }
-    if (fromGPS) checkFavAlerts(pr.km);
+    if (fromGPS) checkFavAlerts(km);
   }
   function toggleFav(id: string) {
     const n = new Set(favorites);
