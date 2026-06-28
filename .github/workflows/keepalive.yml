@@ -1,0 +1,26 @@
+name: supabase-keepalive
+
+# Pinguje Supabase raz dziennie, by projekt na free tier nie został wstrzymany
+# po 7 dniach bezczynności. Wymaga dwóch sekretów repo:
+#   SUPABASE_URL       = https://<ref>.supabase.co
+#   SUPABASE_ANON_KEY  = anon public key
+on:
+  schedule:
+    - cron: "0 6 * * *" # codziennie 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping heartbeat
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ]; then
+            echo "Brak SUPABASE_URL — pomijam."; exit 0
+          fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/heartbeat?select=pinged_at&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "HTTP $code"
+          test "$code" = "200"

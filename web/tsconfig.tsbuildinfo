@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/lib/bundle.ts","./src/lib/categories.ts","./src/lib/db.ts","./src/lib/eta.ts","./src/lib/geo.ts","./src/lib/gpx.ts","./src/lib/importplaces.ts","./src/lib/mapstyle.ts","./src/lib/overpass.ts","./src/lib/supabase.ts","./src/lib/sync.ts","./src/lib/types.ts","./vite.config.ts"],"version":"5.9.3"}
