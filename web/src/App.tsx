@@ -92,6 +92,7 @@ export default function App() {
   const [cfgDraft, setCfgDraft] = useState<TripConfig>(defaultCfg);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [mapView, setMapView] = useState<"list" | "map">("list");
   const pushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [saved, setSaved] = useState<StoredBundle[]>([]);
@@ -653,10 +654,11 @@ export default function App() {
           </>}
         </>}
 
-        <div className="msec">Pomoc i kontakt</div>
+        <div className="msec">O aplikacji i kontakt</div>
         <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
-        <button className="mbtn tint-indigo" onClick={doShare}>📤 Poleć aplikację</button>
-        <a className="mbtn solid-amber" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
+        <button className="mbtn tint-indigo" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>ℹ️ O MiroBike</button>
+        <button className="mbtn tint-violet" onClick={doShare}>📤 Poleć aplikację</button>
+        <button className="mbtn solid-amber" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>☕ Postaw mi kawę</button>
         <a className="mbtn tint-emerald" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt: contact@grapevest.pl</a>
       </div>
 
@@ -781,6 +783,29 @@ export default function App() {
               <li><b>Offline.</b> Wszystko działa bez sieci w terenie. Dodaj apkę do ekranu początkowego (Udostępnij → „Do ekranu początkowego").</li>
             </ol>
             <button className="favbig" onClick={() => setShowHelp(false)}>Rozumiem</button>
+          </div>
+        </div>
+      )}
+
+      {showAbout && (
+        <div className="sheet" onClick={() => setShowAbout(false)}>
+          <div className="card about" onClick={(e) => e.stopPropagation()}>
+            <div className="dh"><b>O MiroBike</b><button onClick={() => setShowAbout(false)}>✕</button></div>
+            <p className="ap">
+              <b>MiroBike Ultra Planner</b> to darmowy planer dla ultra-kolarzy. Wczytujesz ślad GPX
+              wyścigu, a aplikacja pokazuje <b>noclegi, sklepy, wodę, jedzenie i paliwo</b> wzdłuż trasy —
+              z odległością, szacowanym czasem dojazdu i <b>działaniem offline</b> w terenie. Ułożysz też
+              wielodniowy plan z postojami i noclegami.
+            </p>
+            <p className="ap">
+              Powstała jako pomoc dla mojego <b>taty — zapalonego ultramaratończyka</b>, którego możesz
+              spotkać na trasie. Jest i pozostanie darmowa.
+            </p>
+            <p className="ap">
+              Jeśli pomogła Ci w ultra i chcesz podziękować — możesz postawić mi kawę. Będzie mi bardzo miło 🙏
+            </p>
+            <a className="support-cta" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
+            <p className="ap dim">Apka korzysta z danych OpenStreetMap. Kontakt: contact@grapevest.pl</p>
           </div>
         </div>
       )}

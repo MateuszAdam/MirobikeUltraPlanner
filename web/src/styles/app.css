@@ -124,7 +124,14 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .mbtn.tint-sky { background: #102a3f; border-color: #1f4d6b; color: #9cd2ff; font-weight: 600; }
 .mbtn.tint-indigo { background: #1d1f44; border-color: #3a3f7a; color: #c3c6ff; font-weight: 600; }
 .mbtn.tint-emerald { background: #0f3327; border-color: #1f6b4a; color: #86efba; font-weight: 600; }
+.mbtn.tint-violet { background: #2a1a3f; border-color: #5a3a8a; color: #d7b3ff; font-weight: 600; }
 .mbtn.solid-amber { background: var(--here); border-color: transparent; color: #3a2e00; font-weight: 800; }
+
+.about .ap { font-size: 13.5px; line-height: 1.55; margin: 0 0 12px; }
+.about .ap b { color: var(--txt); }
+.about .ap.dim { font-size: 11.5px; color: var(--dim); margin-top: 14px; }
+.support-cta { display: block; text-align: center; text-decoration: none; background: var(--here); color: #3a2e00;
+  font-weight: 800; font-size: 16px; padding: 16px; border-radius: 12px; box-shadow: 0 6px 18px #ffd23f33; }
 
 .mnote { font-family: var(--mono); font-size: 12px; color: var(--dim); }
 .mhelp { font-size: 12px; color: var(--dim); line-height: 1.45; }
