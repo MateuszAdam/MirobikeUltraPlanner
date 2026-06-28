@@ -62,6 +62,7 @@ export default function App() {
   const [gpsOn, setGpsOn] = useState(false);
   const watchId = useRef<number | null>(null);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
+  const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
 
   const [detail, setDetail] = useState<Poi | null>(null);
   const [showPlan, setShowPlan] = useState(false);
@@ -139,9 +140,15 @@ export default function App() {
     if (isSupabaseConfigured()) getUser().then((u) => setUserEmail(u?.email ?? null));
   }, [refreshSaved]);
 
-  // utrzymaj rozmiar mapy przy przełączaniu widoku (mobile)
+  // przy przełączeniu na mapę: dopasuj rozmiar i dośrodkuj na mojej pozycji
   useEffect(() => {
-    if (ready && map.current) setTimeout(() => map.current?.resize(), 60);
+    const m = map.current;
+    if (!ready || !m || mapView !== "map") return;
+    setTimeout(() => {
+      m.resize();
+      const ll = hereLLRef.current;
+      if (ll) m.flyTo({ center: [ll.lon, ll.lat], zoom: Math.max(m.getZoom(), 14), duration: 500 });
+    }, 60);
   }, [mapView, ready]);
 
   // ---- warstwy: trasa + km ----
@@ -280,10 +287,17 @@ export default function App() {
     if (!ds) { setStatus("Najpierw wczytaj trasę."); return; }
     const pr = project(ds, lat, lon);
     setHereKm(pr.km); setHereOff(pr.detourM);
-    (map.current?.getSource("here") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lon, lat] } });
-    (map.current?.getSource("acc") as maplibregl.GeoJSONSource | undefined)?.setData(
+    hereLLRef.current = { lat, lon };
+    const m = map.current;
+    (m?.getSource("here") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lon, lat] } });
+    (m?.getSource("acc") as maplibregl.GeoJSONSource | undefined)?.setData(
       accuracy > 0 ? circlePolygon(lat, lon, accuracy) : { type: "FeatureCollection", features: [] },
     );
+    // kamera: pierwszy fix / zoom-out → przybliż na mnie; potem płynnie podążaj
+    if (m) {
+      if (m.getZoom() < 13) m.flyTo({ center: [lon, lat], zoom: 14, duration: 600 });
+      else m.panTo([lon, lat], { duration: 500 });
+    }
     if (fromGPS) checkFavAlerts(pr.km);
   }
   function toggleGps() {
@@ -295,7 +309,7 @@ export default function App() {
     if (!("geolocation" in navigator)) { setStatus("Brak GPS."); return; }
     try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch { /* ignore */ }
     watchId.current = navigator.geolocation.watchPosition(
-      (p) => { setHere(p.coords.latitude, p.coords.longitude, true, p.coords.accuracy || 0); map.current?.panTo([p.coords.longitude, p.coords.latitude]); },
+      (p) => setHere(p.coords.latitude, p.coords.longitude, true, p.coords.accuracy || 0),
       (e) => setStatus("GPS: " + e.message),
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
     );
