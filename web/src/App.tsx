@@ -16,8 +16,10 @@ import { CAT_COLOR, is24h } from "./lib/ui";
 import { ElevationProfile } from "./components/ElevationProfile";
 import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/Sheets";
 import { useGps } from "./hooks/useGps";
+import { prewarmCorridor } from "./lib/prewarm";
 
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
+const PMTILES_URL = import.meta.env.VITE_PMTILES_URL as string | undefined;
 
 const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 const FETCH_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
@@ -93,6 +95,7 @@ export default function App() {
   const [status, setStatus] = useState("Wczytaj trasę (.gpx), aby zacząć.");
   const [fetching, setFetching] = useState(false);
   const [missing, setMissing] = useState(0);
+  const [prewarming, setPrewarming] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; found: number } | null>(null);
   const fetchSessionRef = useRef<FetchSession | null>(null);
   const [email, setEmail] = useState("");
@@ -424,6 +427,21 @@ export default function App() {
     setTrip(next); persistLocal(pois, favorites, next);
   }
 
+  // Pre-fetch kafelków mapy dla korytarza trasy (offline w terenie).
+  async function doPrewarm() {
+    if (!ds || !PMTILES_URL || prewarming) return;
+    setPrewarming(true);
+    setMenuOpen(false);
+    try {
+      const r = await prewarmCorridor(PMTILES_URL, ds, (done, total) => setStatus(`Pobieram mapę offline… ${done}/${total} kafelków`));
+      setStatus(`Mapa offline gotowa (${r.total} kafelków${r.capped ? ", próbka — zmniejsz zoom źródła dla pełnego pokrycia" : ""}).`);
+    } catch (e: any) {
+      setStatus("Pobieranie mapy nieudane: " + e.message);
+    } finally {
+      setPrewarming(false);
+    }
+  }
+
   // Eksport całej paczki (trasa + miejsca + ulubione) do pliku .json — backup/przenoszenie.
   function exportFile() {
     if (!route || !name) return;
@@ -646,6 +664,12 @@ export default function App() {
         <div className="mhelp">Noclegi szukane zawsze do 5 km. Po zmianie kliknij „Pobierz miejsca".</div>
         <button className="mbtn go" disabled={!route || fetching} onClick={() => { doFetch(); setMenuOpen(false); }}>{fetching ? "Pobieram…" : "⬇ Pobierz miejsca"}</button>
         {savedEntry && <div className="mnote">💾 Zapisane offline ({savedEntry.bundle.pois.length} miejsc){savedEntry.dirty ? " · do wysłania" : userEmail ? " · w chmurze" : ""}</div>}
+
+        {PMTILES_URL && <>
+          <div className="msec">Mapa offline</div>
+          <button className="mbtn" disabled={!route || prewarming} onClick={doPrewarm}>{prewarming ? "Pobieram mapę…" : "🗺 Pobierz mapę dla trasy"}</button>
+          <div className="mhelp">Pobiera kafelki korytarza trasy, by mapa działała bez zasięgu. Zrób to przy Wi-Fi przed startem.</div>
+        </>}
 
         <div className="msec">Zapisane offline</div>
         <select className="mbtn" value="" onChange={(e) => { if (e.target.value) { loadSaved(e.target.value); setMenuOpen(false); } }}>
