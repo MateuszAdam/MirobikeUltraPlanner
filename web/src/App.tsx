@@ -7,20 +7,18 @@ import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS, ORDER } from "./lib/categories";
 import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
-import { MODES, planTrip, candidates, fmtClock } from "./lib/trip";
-import type { TripState, TripConfig, ModeKey } from "./lib/types";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { getUser, signInWithEmail, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
-import type { CatKey, DownRoute, FoodGap, Poi, Route } from "./lib/types";
+import type { CatKey, DownRoute, FoodGap, Poi, Route, TripState } from "./lib/types";
+import { CAT_COLOR, is24h } from "./lib/ui";
+import { ElevationProfile } from "./components/ElevationProfile";
+import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/Sheets";
+import { useGps } from "./hooks/useGps";
 
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 
-const CAT_COLOR: Record<CatKey, string> = {
-  food: "#3ec98a", sleep: "#7c8cff", fuel: "#f5a623", eat: "#ff6b6b",
-  water: "#38bdf8", bike: "#9aa3b2", pharmacy: "#ff5a8a", spot: "#c77dff",
-};
 const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 const FETCH_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 
@@ -37,53 +35,6 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
     pts.push([(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
   }
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [pts] } };
-}
-
-function is24h(t?: Record<string, string>): boolean {
-  return !!t?.opening_hours && /24\s*\/\s*7/.test(t.opening_hours);
-}
-function toLocalInput(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-function defaultCfg(): TripConfig {
-  const m = MODES[1];
-  const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0);
-  return { mode: m.key, speedKmh: m.speedKmh, dailyKm: m.dailyKm, sleepHours: m.sleepHours, lunchHour: 13, startISO: toLocalInput(d) };
-}
-
-function ElevationProfile({ ds, totalKm, cur }: { ds: DownRoute; totalKm: number; cur: number | null }) {
-  const W = 100, H = 36;
-  let min = Infinity, max = -Infinity, ascent = 0, prev: number | null = null;
-  for (let i = 0; i < ds.lat.length; i++) {
-    const e = ds.ele[i];
-    if (e == null) continue;
-    if (prev != null && e > prev) ascent += e - prev;
-    prev = e;
-    min = Math.min(min, e); max = Math.max(max, e);
-  }
-  if (!isFinite(min) || max - min < 2) return null; // brak danych o wysokości
-  const seg = max - min;
-  const xy: [number, number][] = [];
-  for (let i = 0; i < ds.lat.length; i++) {
-    const e = ds.ele[i];
-    if (e == null) continue;
-    xy.push([(ds.cum[i] / (totalKm * 1000)) * W, H - 2 - ((e - min) / seg) * (H - 6)]);
-  }
-  if (xy.length < 2) return null;
-  const line = "M" + xy.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L");
-  const area = `${line} L ${xy[xy.length - 1][0].toFixed(1)} ${H} L ${xy[0][0].toFixed(1)} ${H} Z`;
-  const curX = cur != null ? (cur / totalKm) * W : null;
-  return (
-    <div className="profile">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-        <path d={area} className="pa" />
-        <path d={line} className="pl" />
-        {curX != null && <line x1={curX} y1={0} x2={curX} y2={H} className="pc" />}
-      </svg>
-      <div className="pcap">↑ {Math.round(ascent)} m · max {Math.round(max)} m n.p.m.</div>
-    </div>
-  );
 }
 
 function notify(title: string, body: string) {
@@ -113,17 +64,12 @@ export default function App() {
 
   const [hereKm, setHereKm] = useState<number | null>(null);
   const [hereOff, setHereOff] = useState(0);
-  const [gpsOn, setGpsOn] = useState(false);
-  const watchId = useRef<number | null>(null);
-  const wakeLockRef = useRef<{ release?: () => Promise<void> } | null>(null);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
   const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
 
   const [detail, setDetail] = useState<Poi | null>(null);
   const [showPlan, setShowPlan] = useState(false);
   const [trip, setTrip] = useState<TripState | null>(null);
-  const [editingCfg, setEditingCfg] = useState(false);
-  const [cfgDraft, setCfgDraft] = useState<TripConfig>(defaultCfg);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
@@ -140,6 +86,11 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [authErr, setAuthErr] = useState("");
+  const { gpsOn, toggleGps } = useGps({
+    onFix: (lat, lon, acc) => setHere(lat, lon, true, acc),
+    canTrack: () => !!route,
+    setStatus,
+  });
 
   const totalKm = route ? route.totalM / 1000 : 0;
   const refreshSaved = useCallback(async () => setSaved(await listBundles()), []);
@@ -219,17 +170,6 @@ export default function App() {
     });
     return off;
   }, [refreshSaved]);
-
-  // Wake Lock: przeglądarka zwalnia go po wygaszeniu ekranu — odzyskaj po powrocie, gdy GPS aktywny.
-  useEffect(() => {
-    function onVis() {
-      if (document.visibilityState === "visible" && watchId.current != null) {
-        (navigator as any).wakeLock?.request("screen").then((s: any) => { wakeLockRef.current = s; }).catch(() => {});
-      }
-    }
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
 
   // przy przełączeniu na mapę: dopasuj rozmiar i dośrodkuj na mojej pozycji
   useEffect(() => {
@@ -390,27 +330,6 @@ export default function App() {
     }
     if (fromGPS) checkFavAlerts(pr.km);
   }
-  async function toggleGps() {
-    if (watchId.current != null) {
-      navigator.geolocation.clearWatch(watchId.current);
-      watchId.current = null; setGpsOn(false);
-      try { await wakeLockRef.current?.release?.(); } catch { /* ignore */ }
-      wakeLockRef.current = null;
-      setStatus("GPS zatrzymany.");
-      return;
-    }
-    if (!("geolocation" in navigator)) { setStatus("Ta przeglądarka nie udostępnia GPS."); return; }
-    if (!route) { setStatus("Najpierw wczytaj trasę (krok 1), potem włącz GPS."); return; }
-    setGpsOn(true);
-    setStatus("Szukam pozycji GPS… zezwól na dostęp do lokalizacji.");
-    try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch { /* ignore */ }
-    try { wakeLockRef.current = await (navigator as any).wakeLock?.request("screen"); } catch { /* brak wsparcia */ }
-    watchId.current = navigator.geolocation.watchPosition(
-      (p) => setHere(p.coords.latitude, p.coords.longitude, true, p.coords.accuracy || 0),
-      (e) => { setGpsOn(false); setStatus("GPS niedostępny: " + e.message + " (wymaga HTTPS i zgody na lokalizację)."); },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 },
-    );
-  }
   function toggleFav(id: string) {
     const n = new Set(favorites);
     n.has(id) ? n.delete(id) : n.add(id);
@@ -446,23 +365,8 @@ export default function App() {
       setStatus("Link skopiowany: " + data.url);
     } catch { /* użytkownik anulował */ }
   }
-  // --- Planner ---
-  function openPlanner() {
-    if (trip) { setCfgDraft(trip.cfg); setEditingCfg(false); } else { setCfgDraft(defaultCfg()); setEditingCfg(true); }
-    setShowPlan(true);
-  }
-  function applyMode(mk: ModeKey) {
-    const m = MODES.find((x) => x.key === mk)!;
-    setCfgDraft((c) => ({ ...c, mode: mk, speedKmh: m.speedKmh, dailyKm: m.dailyKm, sleepHours: m.sleepHours }));
-  }
-  function generatePlan() {
-    const next: TripState = { cfg: cfgDraft, overrides: trip?.overrides ?? {} };
-    setTrip(next); persistLocal(pois, favorites, next); setEditingCfg(false);
-  }
-  function setOverride(dayIdx: number, kind: "sleep" | "lunch", pidVal: string) {
-    if (!trip) return;
-    const overrides = { ...trip.overrides, [dayIdx]: { ...trip.overrides[dayIdx], [kind]: pidVal || undefined } };
-    const next: TripState = { ...trip, overrides };
+  // --- Planner --- (UI w PlannerSheet; tu tylko zapis stanu)
+  function applyTrip(next: TripState) {
     setTrip(next); persistLocal(pois, favorites, next);
   }
 
@@ -517,10 +421,6 @@ export default function App() {
     [pois, hereKm, range, active],
   );
   const favPois = useMemo(() => pois.filter((p) => favorites.has(pid(p))), [pois, favorites]);
-  const planDays = useMemo(
-    () => (trip && ds && pois.length ? planTrip(ds, pois, totalKm, trip.cfg, favorites, trip.overrides) : []),
-    [trip, ds, pois, totalKm, favorites],
-  );
 
   const favAhead = useMemo(() => {
     if (hereKm == null || !route) return null;
@@ -551,7 +451,7 @@ export default function App() {
         {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => setFavOnly((v) => !v)}>★</button>
-        <button className="chip plan" onClick={openPlanner}>📑 Plan</button>
+        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
       </header>
 
       <div className="quick">
@@ -732,152 +632,15 @@ export default function App() {
       </div>
 
       {detail && (
-        <div className="sheet" onClick={() => setDetail(null)}>
-          <div className="card" onClick={(e) => e.stopPropagation()}>
-            <div className="dh"><b>{detail.name}</b><button onClick={() => setDetail(null)}>✕</button></div>
-            <div className="dc" style={{ color: CAT_COLOR[detail.cats[0]] }}>{detail.cats.map((c) => CATS[c].label).join(" · ")}</div>
-            <div className="dr">km {detail.km.toFixed(1)} · {detail.detourM} m od trasy {detail.side}{detail.tags._custom ? " · 📌 własne" : ""}</div>
-            {hereKm != null && route && (() => {
-              const d = ((x) => (x < -0.05 && route.isLoop ? x + totalKm : x))(detail.km - hereKm);
-              const eta = etaAheadDelta(ds!, time, d, hereKm, totalKm);
-              return d > 0 && eta != null ? <div className="dr">⏱ ≈ {fmtDur(eta)} stąd</div> : null;
-            })()}
-            {detail.tags.stars && <div className="dr">⭐ {detail.tags.stars}</div>}
-            {detail.tags.opening_hours && <div className="dr">🕒 {detail.tags.opening_hours}{is24h(detail.tags) ? " 🌙" : ""}</div>}
-            {detail.tags.cuisine && <div className="dr">🍽 {detail.tags.cuisine.replace(/;/g, ", ")}</div>}
-            {detail.tags.description && <div className="dr">📝 {detail.tags.description}</div>}
-            {detail.tags["addr:city"] && <div className="dr">📍 {detail.tags["addr:street"] || ""} {detail.tags["addr:city"]}</div>}
-            {(detail.tags.email || detail.tags["contact:email"]) && <div className="dr">✉ {detail.tags.email || detail.tags["contact:email"]}</div>}
-            <div className="acts">
-              <a className="act" target="_blank" rel="noopener" href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat}%2C${detail.lon}`}>🧭 Nawiguj</a>
-              <a className="act" target="_blank" rel="noopener" href={`https://www.google.com/maps/search/?api=1&query=${detail.lat}%2C${detail.lon}`}>🗺 Mapy Google</a>
-              {detail.cats.includes("sleep") && <a className="act" target="_blank" rel="noopener" href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(detail.name)}`}>🛏 Booking</a>}
-              {(detail.tags.phone || detail.tags["contact:phone"]) && <a className="act" href={`tel:${detail.tags.phone || detail.tags["contact:phone"]}`}>☎ Zadzwoń</a>}
-              {(detail.tags.website || detail.tags["contact:website"]) && <a className="act" target="_blank" rel="noopener" href={detail.tags.website || detail.tags["contact:website"]}>🌐 Strona</a>}
-            </div>
-            <button className={"favbig " + (favorites.has(pid(detail)) ? "is" : "")} onClick={() => toggleFav(pid(detail))}>
-              {favorites.has(pid(detail)) ? "★ w ulubionych" : "☆ dodaj do ulubionych"}
-            </button>
-          </div>
-        </div>
+        <DetailSheet poi={detail} onClose={() => setDetail(null)} hereKm={hereKm} isLoop={route?.isLoop ?? false}
+          ds={ds} time={time} totalKm={totalKm} favorites={favorites} onToggleFav={toggleFav} />
       )}
-
       {showPlan && (
-        <div className="sheet" onClick={() => setShowPlan(false)}>
-          <div className="card" onClick={(e) => e.stopPropagation()}>
-            <div className="dh"><b>📑 Planner wyprawy</b><button onClick={() => setShowPlan(false)}>✕</button></div>
-
-            {!route || !pois.length ? (
-              <p className="empty">Wczytaj trasę (.gpx) i „Pobierz miejsca", potem ułóż wielodniowy plan.</p>
-            ) : (!trip || editingCfg) ? (
-              <>
-                <div className="msec">Tryb jazdy</div>
-                <div className="modes">
-                  {MODES.map((m) => (
-                    <button key={m.key} className={"modebtn " + (cfgDraft.mode === m.key ? "on" : "")} onClick={() => applyMode(m.key)}>
-                      <b>{m.label}</b><small>{m.dailyKm} km/dzień · {m.speedKmh} km/h · sen {m.sleepHours} h</small>
-                    </button>
-                  ))}
-                </div>
-                <div className="cfg">
-                  <label>Śr. prędkość (km/h)<input type="number" min={8} max={45} value={cfgDraft.speedKmh} onChange={(e) => setCfgDraft((c) => ({ ...c, speedKmh: +e.target.value }))} /></label>
-                  <label>Dystans / dzień (km)<input type="number" min={40} max={600} step={10} value={cfgDraft.dailyKm} onChange={(e) => setCfgDraft((c) => ({ ...c, dailyKm: +e.target.value }))} /></label>
-                  <label>Sen (h)<input type="number" min={0} max={12} value={cfgDraft.sleepHours} onChange={(e) => setCfgDraft((c) => ({ ...c, sleepHours: +e.target.value }))} /></label>
-                  <label>Godz. obiadu<input type="number" min={10} max={20} value={cfgDraft.lunchHour} onChange={(e) => setCfgDraft((c) => ({ ...c, lunchHour: +e.target.value }))} /></label>
-                  <label className="wide">Start (data i godzina)<input type="datetime-local" value={cfgDraft.startISO} onChange={(e) => setCfgDraft((c) => ({ ...c, startISO: e.target.value }))} /></label>
-                </div>
-                <button className="favbig" onClick={generatePlan}>🗺 Ułóż plan</button>
-              </>
-            ) : (
-              <>
-                <div className="psum">
-                  {planDays.length} {planDays.length === 1 ? "dzień" : "dni"} · {totalKm.toFixed(0)} km · {MODES.find((m) => m.key === trip.cfg.mode)?.label} · {trip.cfg.speedKmh} km/h
-                  <button className="linkbtn" onClick={() => { setCfgDraft(trip.cfg); setEditingCfg(true); }}>⚙ Zmień</button>
-                </div>
-                {planDays.map((d) => {
-                  const nominalEnd = Math.min((d.index + 1) * trip.cfg.dailyKm, totalKm);
-                  const sleepCands = candidates(pois, ["sleep"], nominalEnd, 25);
-                  const lunchCands = candidates(pois, ["eat", "food"], d.lunch?.km ?? (d.fromKm + nominalEnd) / 2, 15);
-                  return (
-                    <details className="day" key={d.index} open={d.index === 0}>
-                      <summary>
-                        <b>Dzień {d.index + 1}</b>
-                        <span className="dkm">km {d.fromKm.toFixed(0)}–{d.toKm.toFixed(0)} · {d.distanceKm.toFixed(0)} km</span>
-                        <span className="clock">{d.isLast ? "🏁 " : "🛏 "}{fmtClock(d.endMs)}</span>
-                      </summary>
-                      <div className="daybody">
-                        <div className="stop">
-                          <div className="stoplab">🍽 Obiad {d.lunch ? "· " + fmtClock(d.lunch.ms) + (d.lunch.poi ? ` · km ${d.lunch.km.toFixed(0)}` : "") : ""}</div>
-                          <select value={trip.overrides[d.index]?.lunch ?? (d.lunch ? pid(d.lunch.poi) : "")} onChange={(e) => setOverride(d.index, "lunch", e.target.value)}>
-                            <option value="">— auto / brak —</option>
-                            {lunchCands.map((p) => <option key={pid(p)} value={pid(p)}>{p.name} (km {p.km.toFixed(0)})</option>)}
-                          </select>
-                          {d.lunch && <button className="linkbtn" onClick={() => { setShowPlan(false); setDetail(d.lunch!.poi); }}>szczegóły</button>}
-                        </div>
-                        {!d.isLast && (
-                          <div className="stop">
-                            <div className="stoplab">🛏 Nocleg {d.sleep ? `· ${fmtClock(d.sleep.ms)} · km ${d.sleep.km.toFixed(0)} · ${d.sleep.poi.detourM} m` : "· brak w pobliżu"}</div>
-                            <select value={trip.overrides[d.index]?.sleep ?? (d.sleep ? pid(d.sleep.poi) : "")} onChange={(e) => setOverride(d.index, "sleep", e.target.value)}>
-                              <option value="">— auto / brak —</option>
-                              {sleepCands.map((p) => <option key={pid(p)} value={pid(p)}>{p.name} (km {p.km.toFixed(0)}, {p.detourM} m)</option>)}
-                            </select>
-                            {d.sleep && <>
-                              <button className="linkbtn" onClick={() => { setShowPlan(false); setDetail(d.sleep!.poi); }}>szczegóły</button>
-                              <a className="linkbtn" target="_blank" rel="noopener" href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(d.sleep.poi.name)}`}>Booking</a>
-                            </>}
-                          </div>
-                        )}
-                        {d.isLast && <div className="stop"><div className="stoplab">🏁 Meta · {fmtClock(d.endMs)} · km {totalKm.toFixed(0)}</div></div>}
-                      </div>
-                    </details>
-                  );
-                })}
-              </>
-            )}
-          </div>
-        </div>
+        <PlannerSheet route={!!route} pois={pois} ds={ds} totalKm={totalKm} favorites={favorites} trip={trip}
+          onClose={() => setShowPlan(false)} onApply={applyTrip} onOpenDetail={(p) => { setShowPlan(false); setDetail(p); }} />
       )}
-
-      {showHelp && (
-        <div className="sheet" onClick={() => setShowHelp(false)}>
-          <div className="card" onClick={(e) => e.stopPropagation()}>
-            <div className="dh"><b>Jak korzystać</b><button onClick={() => setShowHelp(false)}>✕</button></div>
-            <ol className="help">
-              <li><b>Trasa.</b> ☰ → „Wczytaj trasę (.gpx)" — ślad Twojego wyścigu.</li>
-              <li><b>Pobierz miejsca.</b> ☰ → „Pobierz miejsca" — noclegi, sklepy, jedzenie i paliwo wzdłuż trasy. Zapisują się <b>automatycznie offline</b>.</li>
-              <li><b>Filtry.</b> U góry włączasz/wyłączasz kategorie oraz ★ ulubione.</li>
-              <li><b>Pozycja.</b> „📍 Śledź GPS" na rowerze albo dotknij mapy. Lista „przede mną" pokaże, co masz dalej i za ile (⏱ czas dojazdu).</li>
-              <li><b>Plan.</b> Oznacz miejsca gwiazdką (★) → „📑 Plan" ułoży postoje wzdłuż trasy.</li>
-              <li><b>Konto (opcja).</b> Zaloguj się mailem na komputerze i telefonie — przygotujesz trasy na PC i pobierzesz je offline na telefon.</li>
-              <li><b>Offline.</b> Wszystko działa bez sieci w terenie. Dodaj apkę do ekranu początkowego (Udostępnij → „Do ekranu początkowego").</li>
-            </ol>
-            <button className="favbig" onClick={() => setShowHelp(false)}>Rozumiem</button>
-          </div>
-        </div>
-      )}
-
-      {showAbout && (
-        <div className="sheet" onClick={() => setShowAbout(false)}>
-          <div className="card about" onClick={(e) => e.stopPropagation()}>
-            <div className="dh"><b>O MiroBike</b><button onClick={() => setShowAbout(false)}>✕</button></div>
-            <p className="ap">
-              <b>MiroBike Ultra Planner</b> to darmowy planer dla ultra-kolarzy. Wczytujesz ślad GPX
-              wyścigu, a aplikacja pokazuje <b>noclegi, sklepy, wodę, jedzenie i paliwo</b> wzdłuż trasy —
-              z odległością, szacowanym czasem dojazdu i <b>działaniem offline</b> w terenie. Ułożysz też
-              wielodniowy plan z postojami i noclegami.
-            </p>
-            <p className="ap">
-              Powstała jako pomoc dla mojego <b>taty — zapalonego ultramaratończyka</b>, którego możesz
-              spotkać na trasie.
-            </p>
-            <p className="ap">
-              Jeśli pomogła Ci w ultra i chcesz podziękować — możesz postawić mi kawę. Będzie mi bardzo miło 🙏
-            </p>
-            <a className="support-cta" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
-            <p className="ap dim">Apka korzysta z danych OpenStreetMap. Kontakt: contact@grapevest.pl</p>
-          </div>
-        </div>
-      )}
+      {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
+      {showAbout && <AboutSheet onClose={() => setShowAbout(false)} supportUrl={SUPPORT_URL} />}
     </div>
   );
 }
