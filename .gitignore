@@ -1,3 +1,6 @@
 
 # duże pliki map (nie commitujemy — idą na R2)
 *.pmtiles
+
+# wrangler cache (account metadata)
+.wrangler/
