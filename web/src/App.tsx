@@ -39,6 +39,9 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [pts] } };
 }
 
+function is24h(t?: Record<string, string>): boolean {
+  return !!t?.opening_hours && /24\s*\/\s*7/.test(t.opening_hours);
+}
 function toLocalInput(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
@@ -69,6 +72,7 @@ export default function App() {
 
   const [active, setActive] = useState<Set<CatKey>>(new Set(FILTER_CATS));
   const [favOnly, setFavOnly] = useState(false);
+  const [open24Only, setOpen24Only] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [range, setRange] = useState(100);
   const [fetchRadius, setFetchRadius] = useState(500);
@@ -102,8 +106,8 @@ export default function App() {
   const totalKm = route ? route.totalM / 1000 : 0;
   const refreshSaved = useCallback(async () => setSaved(await listBundles()), []);
   const visible = useCallback(
-    (p: Poi) => p.cats.some((c) => active.has(c)) && (!favOnly || favorites.has(pid(p))),
-    [active, favOnly, favorites],
+    (p: Poi) => p.cats.some((c) => active.has(c)) && (!favOnly || favorites.has(pid(p))) && (!open24Only || is24h(p.tags)),
+    [active, favOnly, favorites, open24Only],
   );
 
   const pidIndexRef = useRef(new Map<string, Poi>());
@@ -494,6 +498,7 @@ export default function App() {
       <div className="quick">
         {missing > 0 && <button className="chip refetch" disabled={fetching} onClick={() => doFetch(true)}>⬇ Dobierz brakujące ({missing})</button>}
         <button className={"chip gps " + (gpsOn ? "on" : "")} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
+        <button className={"chip " + (open24Only ? "on" : "")} title="Tylko czynne całodobowo" onClick={() => setOpen24Only((v) => !v)}>🌙 24h</button>
         {FILTER_CATS.map((c) => (
           <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
             <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
@@ -548,7 +553,7 @@ export default function App() {
                     return (
                       <li key={id} onClick={() => setDetail(p)}>
                         <span className="dot" style={{ background: CAT_COLOR[p.cats[0]] }} />
-                        <span className="nm">{p.name}<br /><small>{eta != null ? `⏱ ${fmtDur(eta)} · ` : ""}{p.detourM} m {p.side}</small></span>
+                        <span className="nm">{p.name}<br /><small>{eta != null ? `⏱ ${fmtDur(eta)} · ` : ""}{p.detourM} m {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
                         <span className="km">+{delta.toFixed(1)}</span>
                         <span className={"star " + (favorites.has(id) ? "is" : "")} onClick={(e) => { e.stopPropagation(); toggleFav(id); }}>{favorites.has(id) ? "★" : "☆"}</span>
                       </li>
@@ -587,7 +592,7 @@ export default function App() {
                     return (
                       <li key={id} onClick={() => setDetail(p)}>
                         <span className="dot" style={{ background: CAT_COLOR[p.cats[0]] }} />
-                        <span className="nm">{p.name}<br /><small>km {p.km.toFixed(1)} · {p.detourM} m {p.side}</small></span>
+                        <span className="nm">{p.name}<br /><small>km {p.km.toFixed(1)} · {p.detourM} m {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
                         <span className={"star " + (favorites.has(id) ? "is" : "")} onClick={(e) => { e.stopPropagation(); toggleFav(id); }}>{favorites.has(id) ? "★" : "☆"}</span>
                       </li>
                     );
@@ -649,10 +654,10 @@ export default function App() {
         </>}
 
         <div className="msec">Pomoc i kontakt</div>
-        <button className="mbtn" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
-        <button className="mbtn" onClick={doShare}>📤 Poleć aplikację</button>
-        <a className="mbtn" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
-        <a className="mbtn" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt: contact@grapevest.pl</a>
+        <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
+        <button className="mbtn tint-indigo" onClick={doShare}>📤 Poleć aplikację</button>
+        <a className="mbtn solid-amber" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
+        <a className="mbtn tint-emerald" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt: contact@grapevest.pl</a>
       </div>
 
       {detail && (
@@ -667,7 +672,7 @@ export default function App() {
               return d > 0 && eta != null ? <div className="dr">⏱ ≈ {fmtDur(eta)} stąd</div> : null;
             })()}
             {detail.tags.stars && <div className="dr">⭐ {detail.tags.stars}</div>}
-            {detail.tags.opening_hours && <div className="dr">🕒 {detail.tags.opening_hours}</div>}
+            {detail.tags.opening_hours && <div className="dr">🕒 {detail.tags.opening_hours}{is24h(detail.tags) ? " 🌙" : ""}</div>}
             {detail.tags.cuisine && <div className="dr">🍽 {detail.tags.cuisine.replace(/;/g, ", ")}</div>}
             {detail.tags.description && <div className="dr">📝 {detail.tags.description}</div>}
             {detail.tags["addr:city"] && <div className="dr">📍 {detail.tags["addr:street"] || ""} {detail.tags["addr:city"]}</div>}
