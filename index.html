@@ -377,7 +377,6 @@
     <li><b>Mapa.</b> Przyciskiem „Mapa" pokazujesz ją na pełny ekran, „✕ zamknij mapę" chowasz. Offline działa lista i pozycja; kafelki podkładu mapy wymagają sieci.</li>
     <li><b>Instalacja.</b> W Safari: Udostępnij → „Dodaj do ekranu początkowego". Apka odpali się jak natywna i będzie działać offline.</li>
   </ol>
-  <p class="s" style="margin-top:12px">Niektóre linki do noclegów (Booking) mogą być afiliacyjne — jeśli zarezerwujesz przez nie nocleg, wspierasz rozwój aplikacji. Cena dla Ciebie się nie zmienia.</p>
   <button class="close" id="helpClose">Rozumiem</button>
 </div>
 
@@ -412,8 +411,6 @@ const CLIMB_PENALTY_M=600;    // metrów podjazdu dających +1h (model typu Nais
 // ——— KONFIGURACJA (uzupełnij swoje) ———
 // Link do zbiórki: buycoffee.to/twoj-profil (PL) albo buymeacoffee.com/twoj-profil
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
-// Booking.com Affiliate ID (AID). Puste = zwykły link bez prowizji.
-const BOOKING_AID = "";
 
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function R(){return parseInt(document.getElementById('radius').value,10);}
@@ -830,9 +827,7 @@ function openDetail(p){
 }
 window.closeDetail=function(){ document.body.classList.remove('detail-open'); };
 function bookingUrl(name,city){
-  let u="https://www.booking.com/searchresults.html?ss="+encodeURIComponent((name||"")+" "+(city||""));
-  if(BOOKING_AID) u+="&aid="+encodeURIComponent(BOOKING_AID)+"&label=mirobike";
-  return u;
+  return "https://www.booking.com/searchresults.html?ss="+encodeURIComponent((name||"")+" "+(city||""));
 }
 function detailHtml(p){
   const id=pid(p), t=p.tags||{}, col=CATS[p.cats[0]].color, cats=p.cats.map(c=>CATS[c].label).join(" · ");
