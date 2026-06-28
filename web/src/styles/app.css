@@ -27,7 +27,9 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .toolbar button.go { background: var(--route); color: #04201e; border-color: transparent; font-weight: 700; }
 .toolbar button:disabled { opacity: .45; cursor: default; }
 
-.status { font-family: var(--mono); font-size: 11px; color: var(--dim); padding: 7px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status.ok { color: #7ef0b0; background: #0f2a1e; }
+.status.err { color: #ffb3b3; background: #2a1416; }
 
 .main { display: grid; grid-template-columns: 1fr 360px; min-height: 0; }
 .map { height: 100%; }

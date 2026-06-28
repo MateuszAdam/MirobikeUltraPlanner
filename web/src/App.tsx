@@ -554,7 +554,10 @@ export default function App() {
         </label>
       </div>
 
-      <div className="status">{status}</div>
+      {(() => {
+        const err = /(błąd|nieudan|niedostępn|nie znalaz|nie jest plik|padł|odrzuc|wymaga)/i.test(status);
+        return <div className={"status " + (err ? "err" : "ok")}>{err ? "⚠ " : "✓ "}{status}</div>;
+      })()}
 
       <div className={"main " + mapView}>
         <div ref={mapDiv} className="map" />
@@ -845,7 +848,7 @@ export default function App() {
             </p>
             <p className="ap">
               Powstała jako pomoc dla mojego <b>taty — zapalonego ultramaratończyka</b>, którego możesz
-              spotkać na trasie. Jest i pozostanie darmowa.
+              spotkać na trasie.
             </p>
             <p className="ap">
               Jeśli pomogła Ci w ultra i chcesz podziękować — możesz postawić mi kawę. Będzie mi bardzo miło 🙏
