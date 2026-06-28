@@ -9,9 +9,9 @@ export interface TimeProfile {
   ascent: number; // suma podjazdów [m]
 }
 
-export function buildTimeProfile(ds: DownRoute): TimeProfile {
+export function buildTimeProfile(ds: DownRoute, speedKmh: number = RIDE_KMH): TimeProfile {
   const time = [0];
-  const vMs = (RIDE_KMH * 1000) / 3600;
+  const vMs = (speedKmh * 1000) / 3600;
   const penSecPerM = 3600 / CLIMB_PENALTY_M;
   let ascent = 0;
   for (let i = 1; i < ds.lat.length; i++) {

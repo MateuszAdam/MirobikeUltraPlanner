@@ -1,5 +1,5 @@
 import { downsample, project } from "./geo";
-import type { Bundle, BundlePoi, FoodGap, Poi, Route, DownRoute } from "./types";
+import type { Bundle, BundlePoi, FoodGap, Poi, Route, DownRoute, TripState } from "./types";
 
 const KEEP_TAGS = [
   "opening_hours", "phone", "website", "email", "stars", "cuisine", "brand",
@@ -16,7 +16,7 @@ export function tagSubset(t: Record<string, string> | undefined): Record<string,
 }
 
 /** Buduje kompaktową paczkę offline z trasy + POI. */
-export function buildBundle(name: string, route: Route, pois: Poi[], gaps: FoodGap[]): Bundle {
+export function buildBundle(name: string, route: Route, pois: Poi[], gaps: FoodGap[], trip?: TripState): Bundle {
   const ds = downsample(route, 100);
   return {
     name,
@@ -33,6 +33,7 @@ export function buildBundle(name: string, route: Route, pois: Poi[], gaps: FoodG
       route_km: +p.km.toFixed(3), detour_m: p.detourM, side: p.side, tags: tagSubset(p.tags),
     })),
     food_gaps: gaps.map((g) => ({ from_km: +g.fromKm.toFixed(2), to_km: +g.toKm.toFixed(2), gap_km: +g.gapKm.toFixed(2) })),
+    ...(trip ? { trip } : {}),
   };
 }
 

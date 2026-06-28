@@ -6,7 +6,9 @@ import { downsample, project, pid, aheadDelta } from "./lib/geo";
 import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS, ORDER } from "./lib/categories";
-import { aheadList, nextShop, nextOfCat, gapBeforeStretch, planRows, plPlural, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
+import { aheadList, nextShop, nextOfCat, gapBeforeStretch, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
+import { MODES, planTrip, candidates, fmtClock } from "./lib/trip";
+import type { TripState, TripConfig, ModeKey } from "./lib/types";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
@@ -35,6 +37,16 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
     pts.push([(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
   }
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [pts] } };
+}
+
+function toLocalInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function defaultCfg(): TripConfig {
+  const m = MODES[1];
+  const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0);
+  return { mode: m.key, speedKmh: m.speedKmh, dailyKm: m.dailyKm, sleepHours: m.sleepHours, lunchHour: 13, startISO: toLocalInput(d) };
 }
 
 function notify(title: string, body: string) {
@@ -71,6 +83,9 @@ export default function App() {
 
   const [detail, setDetail] = useState<Poi | null>(null);
   const [showPlan, setShowPlan] = useState(false);
+  const [trip, setTrip] = useState<TripState | null>(null);
+  const [editingCfg, setEditingCfg] = useState(false);
+  const [cfgDraft, setCfgDraft] = useState<TripConfig>(defaultCfg);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [mapView, setMapView] = useState<"list" | "map">("list");
@@ -206,10 +221,11 @@ export default function App() {
   }, [pois, visible, favorites, ready]);
 
   // ---- akcje ----
-  function applyRoute(r: Route, nm: string, ps: Poi[], favs: Set<string>) {
+  function applyRoute(r: Route, nm: string, ps: Poi[], favs: Set<string>, tripArg?: TripState | null) {
     const d = downsample(r, 150);
     setRoute(r); setDs(d); setTime(buildTimeProfile(d).time);
     setPois(ps); setGaps(computeGaps(ps)); setName(nm); setFavorites(favs); setHereKm(null);
+    setTrip(tripArg ?? null);
     alertedRef.current.clear();
     fetchSessionRef.current = null; setMissing(0);
   }
@@ -251,9 +267,9 @@ export default function App() {
     }, 2000);
   }
   // Auto-zapis offline (IndexedDB) — bez przycisku, dane trzymają się same.
-  async function persistLocal(poiList: Poi[], favSet: Set<string>) {
+  async function persistLocal(poiList: Poi[], favSet: Set<string>, tripArg: TripState | null = trip) {
     if (!route || !name) return;
-    const bundle = buildBundle(name, route, poiList, computeGaps(poiList));
+    const bundle = buildBundle(name, route, poiList, computeGaps(poiList), tripArg ?? undefined);
     const now = new Date().toISOString();
     bundle.updated_at = now;
     await putBundle({ name, bundle, favorites: [...favSet], updated_at: now, dirty: true });
@@ -263,7 +279,7 @@ export default function App() {
   async function loadSaved(n: string) {
     const sb = await db.bundles.get(n);
     if (!sb) return;
-    applyRoute(routeFromBundle(sb.bundle), n, poisFromBundle(sb.bundle), new Set(sb.favorites));
+    applyRoute(routeFromBundle(sb.bundle), n, poisFromBundle(sb.bundle), new Set(sb.favorites), sb.bundle.trip ?? null);
     setDs(downsampledFromBundle(sb.bundle));
     setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc).`);
   }
@@ -375,6 +391,26 @@ export default function App() {
       setStatus("Link skopiowany: " + data.url);
     } catch { /* użytkownik anulował */ }
   }
+  // --- Planner ---
+  function openPlanner() {
+    if (trip) { setCfgDraft(trip.cfg); setEditingCfg(false); } else { setCfgDraft(defaultCfg()); setEditingCfg(true); }
+    setShowPlan(true);
+  }
+  function applyMode(mk: ModeKey) {
+    const m = MODES.find((x) => x.key === mk)!;
+    setCfgDraft((c) => ({ ...c, mode: mk, speedKmh: m.speedKmh, dailyKm: m.dailyKm, sleepHours: m.sleepHours }));
+  }
+  function generatePlan() {
+    const next: TripState = { cfg: cfgDraft, overrides: trip?.overrides ?? {} };
+    setTrip(next); persistLocal(pois, favorites, next); setEditingCfg(false);
+  }
+  function setOverride(dayIdx: number, kind: "sleep" | "lunch", pidVal: string) {
+    if (!trip) return;
+    const overrides = { ...trip.overrides, [dayIdx]: { ...trip.overrides[dayIdx], [kind]: pidVal || undefined } };
+    const next: TripState = { ...trip, overrides };
+    setTrip(next); persistLocal(pois, favorites, next);
+  }
+
   // Eksport całej paczki (trasa + miejsca + ulubione) do pliku .json — backup/przenoszenie.
   function exportFile() {
     if (!route || !name) return;
@@ -398,7 +434,7 @@ export default function App() {
       const now = new Date().toISOString();
       await putBundle({ name: nm, bundle, favorites: favs, updated_at: bundle.updated_at || now, dirty: true });
       await refreshSaved();
-      applyRoute(routeFromBundle(bundle), nm, poisFromBundle(bundle), new Set(favs));
+      applyRoute(routeFromBundle(bundle), nm, poisFromBundle(bundle), new Set(favs), bundle.trip ?? null);
       pushSoon();
       setStatus(`Wczytano z pliku: ${nm} (${bundle.pois.length} miejsc) — zapisano offline.`);
     } catch (e: any) { setStatus("Błąd wczytania pliku: " + e.message); }
@@ -418,9 +454,9 @@ export default function App() {
     [gaps, hereKm, range],
   );
   const favPois = useMemo(() => pois.filter((p) => favorites.has(pid(p))), [pois, favorites]);
-  const plan = useMemo(
-    () => planRows(favPois, ds, time, hereKm, route?.isLoop ?? false, totalKm),
-    [favPois, ds, time, hereKm, route, totalKm],
+  const planDays = useMemo(
+    () => (trip && ds && pois.length ? planTrip(ds, pois, totalKm, trip.cfg, favorites, trip.overrides) : []),
+    [trip, ds, pois, totalKm, favorites],
   );
 
   const favAhead = useMemo(() => {
@@ -452,7 +488,7 @@ export default function App() {
         {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => setFavOnly((v) => !v)}>★</button>
-        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
+        <button className="chip plan" onClick={openPlanner}>📑 Plan</button>
       </header>
 
       <div className="quick">
@@ -653,22 +689,73 @@ export default function App() {
       {showPlan && (
         <div className="sheet" onClick={() => setShowPlan(false)}>
           <div className="card" onClick={(e) => e.stopPropagation()}>
-            <div className="dh"><b>📑 Plan przystanków</b><button onClick={() => setShowPlan(false)}>✕</button></div>
-            {!plan.length ? (
-              <p className="empty">Brak ulubionych. Dodaj miejsca gwiazdką (★) — zbuduje się plan postojów wzdłuż trasy.</p>
+            <div className="dh"><b>📑 Planner wyprawy</b><button onClick={() => setShowPlan(false)}>✕</button></div>
+
+            {!route || !pois.length ? (
+              <p className="empty">Wczytaj trasę (.gpx) i „Pobierz miejsca", potem ułóż wielodniowy plan.</p>
+            ) : (!trip || editingCfg) ? (
+              <>
+                <div className="msec">Tryb jazdy</div>
+                <div className="modes">
+                  {MODES.map((m) => (
+                    <button key={m.key} className={"modebtn " + (cfgDraft.mode === m.key ? "on" : "")} onClick={() => applyMode(m.key)}>
+                      <b>{m.label}</b><small>{m.dailyKm} km/dzień · {m.speedKmh} km/h · sen {m.sleepHours} h</small>
+                    </button>
+                  ))}
+                </div>
+                <div className="cfg">
+                  <label>Śr. prędkość (km/h)<input type="number" min={8} max={45} value={cfgDraft.speedKmh} onChange={(e) => setCfgDraft((c) => ({ ...c, speedKmh: +e.target.value }))} /></label>
+                  <label>Dystans / dzień (km)<input type="number" min={40} max={600} step={10} value={cfgDraft.dailyKm} onChange={(e) => setCfgDraft((c) => ({ ...c, dailyKm: +e.target.value }))} /></label>
+                  <label>Sen (h)<input type="number" min={0} max={12} value={cfgDraft.sleepHours} onChange={(e) => setCfgDraft((c) => ({ ...c, sleepHours: +e.target.value }))} /></label>
+                  <label>Godz. obiadu<input type="number" min={10} max={20} value={cfgDraft.lunchHour} onChange={(e) => setCfgDraft((c) => ({ ...c, lunchHour: +e.target.value }))} /></label>
+                  <label className="wide">Start (data i godzina)<input type="datetime-local" value={cfgDraft.startISO} onChange={(e) => setCfgDraft((c) => ({ ...c, startISO: e.target.value }))} /></label>
+                </div>
+                <button className="favbig" onClick={generatePlan}>🗺 Ułóż plan</button>
+              </>
             ) : (
               <>
-                <div className="dr">{plan.length} {plPlural(plan.length)} · rozpiętość {(favPois[favPois.length - 1].km - favPois[0].km).toFixed(0)} km</div>
-                <ul className="list plan">
-                  {plan.map((r) => (
-                    <li key={pid(r.p)} onClick={() => { setShowPlan(false); setDetail(r.p); }}>
-                      <span className="no">{r.index + 1}</span>
-                      <span className="dot" style={{ background: CAT_COLOR[r.p.cats[0]] }} />
-                      <span className="nm">{r.p.name}<br /><small>km {r.p.km.toFixed(1)} · {CATS[r.p.cats[0]].label.toLowerCase()}{r.fromYouKm != null && r.fromYouKm > 0 ? ` · ${r.fromYouKm.toFixed(1)} km od Ciebie` : ""}</small></span>
-                      <span className="km">+{r.segKm.toFixed(1)}<br /><small>{r.index === 0 ? "od startu" : "od poprz."}{r.segSec != null ? ` · ${fmtDur(r.segSec)}` : ""}</small></span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="psum">
+                  {planDays.length} {planDays.length === 1 ? "dzień" : "dni"} · {totalKm.toFixed(0)} km · {MODES.find((m) => m.key === trip.cfg.mode)?.label} · {trip.cfg.speedKmh} km/h
+                  <button className="linkbtn" onClick={() => { setCfgDraft(trip.cfg); setEditingCfg(true); }}>⚙ Zmień</button>
+                </div>
+                {planDays.map((d) => {
+                  const nominalEnd = Math.min((d.index + 1) * trip.cfg.dailyKm, totalKm);
+                  const sleepCands = candidates(pois, ["sleep"], nominalEnd, 25);
+                  const lunchCands = candidates(pois, ["eat", "food"], d.lunch?.km ?? (d.fromKm + nominalEnd) / 2, 15);
+                  return (
+                    <details className="day" key={d.index} open={d.index === 0}>
+                      <summary>
+                        <b>Dzień {d.index + 1}</b>
+                        <span className="dkm">km {d.fromKm.toFixed(0)}–{d.toKm.toFixed(0)} · {d.distanceKm.toFixed(0)} km</span>
+                        <span className="clock">{d.isLast ? "🏁 " : "🛏 "}{fmtClock(d.endMs)}</span>
+                      </summary>
+                      <div className="daybody">
+                        <div className="stop">
+                          <div className="stoplab">🍽 Obiad {d.lunch ? "· " + fmtClock(d.lunch.ms) + (d.lunch.poi ? ` · km ${d.lunch.km.toFixed(0)}` : "") : ""}</div>
+                          <select value={trip.overrides[d.index]?.lunch ?? (d.lunch ? pid(d.lunch.poi) : "")} onChange={(e) => setOverride(d.index, "lunch", e.target.value)}>
+                            <option value="">— auto / brak —</option>
+                            {lunchCands.map((p) => <option key={pid(p)} value={pid(p)}>{p.name} (km {p.km.toFixed(0)})</option>)}
+                          </select>
+                          {d.lunch && <button className="linkbtn" onClick={() => { setShowPlan(false); setDetail(d.lunch!.poi); }}>szczegóły</button>}
+                        </div>
+                        {!d.isLast && (
+                          <div className="stop">
+                            <div className="stoplab">🛏 Nocleg {d.sleep ? `· ${fmtClock(d.sleep.ms)} · km ${d.sleep.km.toFixed(0)} · ${d.sleep.poi.detourM} m` : "· brak w pobliżu"}</div>
+                            <select value={trip.overrides[d.index]?.sleep ?? (d.sleep ? pid(d.sleep.poi) : "")} onChange={(e) => setOverride(d.index, "sleep", e.target.value)}>
+                              <option value="">— auto / brak —</option>
+                              {sleepCands.map((p) => <option key={pid(p)} value={pid(p)}>{p.name} (km {p.km.toFixed(0)}, {p.detourM} m)</option>)}
+                            </select>
+                            {d.sleep && <>
+                              <button className="linkbtn" onClick={() => { setShowPlan(false); setDetail(d.sleep!.poi); }}>szczegóły</button>
+                              <a className="linkbtn" target="_blank" rel="noopener" href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(d.sleep.poi.name)}`}>Booking</a>
+                            </>}
+                          </div>
+                        )}
+                        {d.isLast && <div className="stop"><div className="stoplab">🏁 Meta · {fmtClock(d.endMs)} · km {totalKm.toFixed(0)}</div></div>}
+                      </div>
+                    </details>
+                  );
+                })}
               </>
             )}
           </div>

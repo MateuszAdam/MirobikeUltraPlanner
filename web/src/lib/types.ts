@@ -40,6 +40,19 @@ export interface FoodGap {
   gapKm: number;
 }
 
+// --- Planner (wielodniowy plan wyprawy) ---
+export type ModeKey = "max" | "strong" | "rec";
+export interface TripConfig {
+  mode: ModeKey;
+  speedKmh: number;
+  dailyKm: number;
+  sleepHours: number;
+  lunchHour: number;
+  startISO: string;
+}
+export interface Override { sleep?: string; lunch?: string }
+export interface TripState { cfg: TripConfig; overrides: Record<number, Override> }
+
 /** Kompaktowa paczka offline — to ląduje w localStorage/IndexedDB i w Supabase. */
 export interface Bundle {
   name: string;
@@ -48,6 +61,7 @@ export interface Bundle {
   route: number[][]; // [lat, lon, cum_km, ele?]
   pois: BundlePoi[];
   food_gaps?: { from_km: number; to_km: number; gap_km: number }[];
+  trip?: TripState; // konfiguracja + edycje plannera
   updated_at?: string;
 }
 
