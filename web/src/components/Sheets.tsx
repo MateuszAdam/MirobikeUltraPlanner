@@ -190,7 +190,7 @@ export function AboutSheet({ onClose, supportUrl }: { onClose: () => void; suppo
         </p>
         <p className="ap">Jeśli pomogła Ci w ultra i chcesz podziękować — możesz postawić mi kawę. Będzie mi bardzo miło 🙏</p>
         <a className="support-cta" href={supportUrl} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
-        <p className="ap dim">Apka korzysta z danych OpenStreetMap. Kontakt: contact@grapevest.pl</p>
+        <p className="ap dim">Dane: © OpenStreetMap contributors, Overture Maps Foundation. Kontakt: contact@grapevest.pl</p>
       </div>
     </div>
   );

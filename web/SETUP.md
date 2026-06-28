@@ -76,6 +76,28 @@ Workflow `.github/workflows/keepalive.yml` pinguje `heartbeat` codziennie.
 - **Na komputerze**: logujesz się → wczytujesz GPX → „Pobierz miejsca" (ciężki Overpass) → „Zapisz" → „Sync" wysyła lekką paczkę (jsonb) na konto.
 - **Na telefonie**: logujesz się → „Sync" pobiera paczki do IndexedDB → działasz **offline** na małych danych.
 
+## Prep CLI: bogatsze POI z Overture (desktop)
+OSM (Overpass) bywa ubogie w biznesy. Alternatywa: **Overture Places** (~60 mln POI,
+licencja CDLA Permissive 2.0 — wolno pobierać i bundle'ować). Skrypt produkuje gotowy
+`bundle.json` z **korytarza trasy** (pętle: nic ze środka), bez zapytań w runtime apki.
+
+```bash
+cd web
+# wymaga jednego z: `pip install overturemaps`  ALBO  `duckdb` w PATH
+npm run build:bundle -- \
+  --gpx ../trasa.gpx --name "3C 2026" \
+  --radius 2000 --radius-sleep 5000 \
+  --release 2026-05-21.0 --confidence 0.5 \
+  --out ./out/3c-2026 --also-data-js
+```
+- Overture → food/sleep/fuel/eat/pharmacy; woda i serwis rowerowy dobierane z OSM.
+- `--release` sprawdź na overturemaps.org/release (DuckDB wymaga tego argumentu).
+- `--from-geojson <plik>` — pomiń pobieranie, użyj gotowego GeoJSON.
+- Wynik `out/<slug>/bundle.json` wczytasz w aplikacji: ☰ → „Wczytaj z pliku (.json)".
+- In-app pobieranie z Overpass zostaje jako alternatywa (bez zmian).
+
+**Atrybucja:** © OpenStreetMap contributors, Overture Maps Foundation.
+
 ## Stan rewrite (gałąź `rewrite`) — PARYTET FUNKCJONALNY ✅
 ✅ Scaffold, core logic (GPX/geo/ETA/import/Overpass/planner), Dexie + `persist()`, Supabase client + sync, MapLibre+PMTiles, PWA, schemat SQL, keep-alive.
 ✅ UI: przewodnik krokowy, filtry kategorii, GPS „śledź" + kółko dokładności + powiadomienia o ulubionych, panel „przede mną" z ETA, ostrzeżenia (następny sklep / luka przed odcinkiem), Plan przystanków, arkusz szczegółów, import KML/CSV/GPX w UI, znaczniki km, zapis/wczytanie/zmiana nazwy/usuwanie offline, przełącznik mapa/lista (mobile).

@@ -43,3 +43,13 @@ export const CATS: Record<CatKey, CatDef> = {
 
 // Kolejność w wierszu „następne wg kategorii" (woda ważna w ultra).
 export const ORDER: CatKey[] = ["food", "water", "fuel", "eat", "sleep"];
+
+/** Zgaduje kategorię z nazwy/opisu (fallback dla danych bez kategorii, np. Overture). */
+export function inferCat(s: string): CatKey {
+  s = (s || "").toLowerCase();
+  if (/hotel|nocleg|pensjonat|hostel|motel|guest|apartament|kwatera|schronisko|camping|kemping|agrotur|willa|chata|dom\s+gości/.test(s)) return "sleep";
+  if (/stacja|paliw|orlen|\bbp\b|shell|lotos|circle\s*k|amic|moya|fuel|lpg|tankow|benzyn/.test(s)) return "fuel";
+  if (/restaur|\bbar\b|\bpub\b|kawiar|caf[eé]|pizz|bistro|jadł|kebab|burger|lodziar|piwiar|food|gospoda|karczma/.test(s)) return "eat";
+  if (/sklep|market|żabka|biedronka|lidl|kaufland|delikates|spożyw|piekar|grocer|\bshop\b|carrefour|dino|lewiatan|stokrotka|netto|aldi|auchan/.test(s)) return "food";
+  return "spot";
+}
