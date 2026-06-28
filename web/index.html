@@ -6,12 +6,38 @@
     <meta name="theme-color" content="#14161b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MiroBike" />
+
+    <title>MiroBike Ultra Planner — planer noclegów i postojów na trasie ultra</title>
+    <meta name="description" content="Darmowy planer dla ultrakolarzy: wczytaj trasę GPX, a MiroBike pokaże noclegi, sklepy, jedzenie i paliwo wzdłuż trasy — z odległością, czasem dojazdu i działaniem offline w terenie." />
+    <link rel="canonical" href="https://www.mirobike.grapevest.pl/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MiroBike Ultra Planner" />
+    <meta property="og:description" content="Planer noclegów i postojów na trasie ultra — noclegi, sklepy, jedzenie i paliwo wzdłuż trasy GPX, offline." />
+    <meta property="og:url" content="https://www.mirobike.grapevest.pl/" />
+    <meta property="og:image" content="https://www.mirobike.grapevest.pl/icon-512.png" />
+    <meta property="og:locale" content="pl_PL" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="MiroBike Ultra Planner" />
+    <meta name="twitter:description" content="Planer noclegów i postojów na trasie ultra — offline." />
+    <meta name="twitter:image" content="https://www.mirobike.grapevest.pl/icon-512.png" />
+
     <link rel="icon" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <title>MiroBike Ultra Planner</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Treść dla wyszukiwarek zanim załaduje się aplikacja (React ją zastąpi). -->
+      <noscript>
+        <h1>MiroBike Ultra Planner</h1>
+        <p>
+          Darmowy planer dla ultrakolarzy. Wczytaj trasę GPX, a MiroBike pokaże noclegi,
+          sklepy, jedzenie i stacje paliw wzdłuż trasy — wraz z odległością, szacowanym
+          czasem dojazdu i pełnym działaniem offline w terenie.
+        </p>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
