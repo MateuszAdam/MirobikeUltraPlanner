@@ -137,6 +137,9 @@ export default function App() {
   const fetchSessionRef = useRef<FetchSession | null>(null);
   const [email, setEmail] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+  const [authErr, setAuthErr] = useState("");
 
   const totalKm = route ? route.totalM / 1000 : 0;
   const refreshSaved = useCallback(async () => setSaved(await listBundles()), []);
@@ -407,9 +410,11 @@ export default function App() {
     setActive((prev) => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
   }
   async function login() {
-    if (!email) return;
-    try { await signInWithEmail(email); setStatus("Wysłałem link logowania na " + email + "."); }
-    catch (e: any) { setStatus("Logowanie nieudane: " + e.message); }
+    if (!email || authBusy) return;
+    setAuthBusy(true); setAuthErr(""); setLinkSentTo(null);
+    try { await signInWithEmail(email); setLinkSentTo(email); }
+    catch (e: any) { setAuthErr(e.message || "nie udało się wysłać linku"); }
+    finally { setAuthBusy(false); }
   }
   async function doSync() {
     try {
@@ -696,10 +701,14 @@ export default function App() {
             <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
             <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
             <button className="mbtn" onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button>
+          </> : linkSentTo ? <>
+            <div className="mok">✉ Wysłaliśmy link logowania na <b>{linkSentTo}</b>.<br />Otwórz go <b>na tym urządzeniu</b> (sprawdź też spam) — wrócisz tu zalogowany.</div>
+            <button className="mbtn" onClick={() => { setLinkSentTo(null); setAuthErr(""); }}>↩ Wyślij ponownie / inny e-mail</button>
           </> : <>
             <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła — dostajesz link), by przygotować trasy na komputerze i mieć je offline na telefonie.</div>
-            <input className="mbtn" placeholder="twój e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <button className="mbtn go" onClick={login}>✉ Wyślij link logowania</button>
+            <input className="mbtn" type="email" placeholder="twój e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <button className="mbtn go" disabled={!email || authBusy} onClick={login}>{authBusy ? "Wysyłam…" : "✉ Wyślij link logowania"}</button>
+            {authErr && <div className="merr">⚠ Nie udało się: {authErr}</div>}
           </>}
         </>}
 
