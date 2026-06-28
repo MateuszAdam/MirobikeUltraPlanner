@@ -43,32 +43,3 @@ export const CATS: Record<CatKey, CatDef> = {
 
 // Kolejność w wierszu „następne wg kategorii" (woda ważna w ultra).
 export const ORDER: CatKey[] = ["food", "water", "fuel", "eat", "sleep"];
-
-/** Zgaduje kategorię importowanego punktu z nazwy/opisu. */
-export function inferCat(s: string): CatKey {
-  s = (s || "").toLowerCase();
-  if (/hotel|nocleg|pensjonat|hostel|motel|guest|apartament|kwatera|schronisko|camping|kemping|agrotur|willa|chata|dom\s+gości/.test(s)) return "sleep";
-  if (/stacja|paliw|orlen|\bbp\b|shell|lotos|circle\s*k|amic|moya|fuel|lpg|tankow|benzyn/.test(s)) return "fuel";
-  if (/restaur|\bbar\b|\bpub\b|kawiar|caf[eé]|pizz|bistro|jadł|kebab|burger|lodziar|piwiar|food|gospoda|karczma/.test(s)) return "eat";
-  if (/sklep|market|żabka|biedronka|lidl|kaufland|delikates|spożyw|piekar|grocer|\bshop\b|carrefour|dino|lewiatan|stokrotka|netto|aldi|auchan/.test(s)) return "food";
-  return "spot";
-}
-
-export function normCat(s: string): CatKey | "" {
-  s = (s || "").toLowerCase().trim();
-  if (["food", "sleep", "fuel", "eat", "spot"].includes(s)) return s as CatKey;
-  if (/nocleg|hotel|sleep/.test(s)) return "sleep";
-  if (/paliw|fuel|stacja/.test(s)) return "fuel";
-  if (/jedz|eat|restaur/.test(s)) return "eat";
-  if (/sklep|spożyw|food|market/.test(s)) return "food";
-  return "";
-}
-
-/** Filtry Overpass per kategoria (do zapytania nwr). */
-export function overpassFilters(): { tag: string; values: string }[] {
-  return [
-    { tag: "shop", values: FOOD_SHOPS.join("|") },
-    { tag: "tourism", values: SLEEP_TOURISM.join("|") },
-    { tag: "amenity", values: EAT_AMENITY.join("|") },
-  ];
-}

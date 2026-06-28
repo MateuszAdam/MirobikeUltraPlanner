@@ -5,6 +5,17 @@ import { VitePWA } from "vite-plugin-pwa";
 // Offline-first PWA. App-shell jest precache'owany; kafelki mapy (MapLibre/PMTiles
 // lub raster) cache'owane runtime ze strategią CacheFirst.
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        // Rozdziel ciężkie biblioteki do osobnych chunków (lepszy cache, równoległe ładowanie).
+        manualChunks: {
+          maplibre: ["maplibre-gl", "pmtiles", "protomaps-themes-base"],
+          supabase: ["@supabase/supabase-js"],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

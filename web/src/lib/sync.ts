@@ -1,5 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "./supabase";
-import { db, listBundles, putBundle, setMeta } from "./db";
+import { db, listBundles, putBundle, setMeta, getMeta } from "./db";
 import type { Bundle } from "./types";
 
 /**
@@ -60,11 +60,13 @@ export async function pushDirty(userId: string): Promise<number> {
   return dirty.length;
 }
 
-/** Pobiera paczki z chmury i scala (nadpisuje lokalne, jeśli nowsze). */
+/** Pobiera paczki z chmury i scala (nadpisuje lokalne, jeśli nowsze).
+ *  Delta: po pierwszym pełnym pobraniu ściąga tylko wiersze nowsze niż ostatni sync. */
 export async function pullAll(): Promise<number> {
-  const { data, error } = await getSupabase()
-    .from("routes")
-    .select("name, bundle, favorites, updated_at");
+  const since = await getMeta("lastSyncedAt");
+  let q = getSupabase().from("routes").select("name, bundle, favorites, updated_at");
+  if (since) q = q.gt("updated_at", since);
+  const { data, error } = await q;
   if (error) throw error;
   let applied = 0;
   for (const row of data ?? []) {

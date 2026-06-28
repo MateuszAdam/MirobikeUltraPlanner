@@ -220,6 +220,17 @@ export default function App() {
     return off;
   }, [refreshSaved]);
 
+  // Wake Lock: przeglądarka zwalnia go po wygaszeniu ekranu — odzyskaj po powrocie, gdy GPS aktywny.
+  useEffect(() => {
+    function onVis() {
+      if (document.visibilityState === "visible" && watchId.current != null) {
+        (navigator as any).wakeLock?.request("screen").then((s: any) => { wakeLockRef.current = s; }).catch(() => {});
+      }
+    }
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   // przy przełączeniu na mapę: dopasuj rozmiar i dośrodkuj na mojej pozycji
   useEffect(() => {
     const m = map.current;
