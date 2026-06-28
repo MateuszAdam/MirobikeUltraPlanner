@@ -17,7 +17,7 @@
 <style>
   :root{
     --ink:#14161b; --ink2:#1c1f27; --line:#2b303b; --txt:#e9ecf1; --dim:#9aa3b2;
-    --food:#3ec98a; --sleep:#7c8cff; --fuel:#f5a623; --eat:#ff6b6b;
+    --food:#3ec98a; --sleep:#7c8cff; --fuel:#f5a623; --eat:#ff6b6b; --spot:#c77dff;
     --route:#19e0d6; --here:#ffd23f; --warn:#ff5a5a; --fav:#ffd23f;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -278,6 +278,7 @@
   <span class="cat" data-cat="sleep"><span class="dot" style="background:var(--sleep)"></span>noclegi</span>
   <span class="cat" data-cat="fuel"><span class="dot" style="background:var(--fuel)"></span>paliwo</span>
   <span class="cat" data-cat="eat"><span class="dot" style="background:var(--eat)"></span>jedzenie</span>
+  <span class="cat" data-cat="spot"><span class="dot" style="background:var(--spot)"></span>własne</span>
   <span class="grp">do
     <select id="range">
       <option value="50">50 km</option>
@@ -323,6 +324,9 @@
   <div class="hint">Noclegi szukane zawsze do 5 km w bok (warto nadłożyć). Sklepy, jedzenie i paliwo — wg promienia powyżej.</div>
   <button id="fetch" class="go" disabled>Pobierz miejsca</button>
   <div class="hint">Pobranie zapisuje się automatycznie offline.</div>
+  <label class="btn" for="customfile">➕ Dodaj własne miejsca (KML/GPX/CSV)</label>
+  <input id="customfile" type="file" accept=".kml,.gpx,.csv,.txt">
+  <div class="hint">Eksportuj listę z Google My Maps (KML), GPX z waypointami lub CSV (nazwa, lat, lon). Dołączymy je do danych OSM.</div>
   <label class="btn" for="jsonfile">Wczytaj miejsca (.json)</label>
   <input id="jsonfile" type="file" accept=".json">
   <button id="export" disabled>Eksportuj miejsca (.json)</button>
@@ -350,7 +354,8 @@
   <ol>
     <li><b>Trasa.</b> Na liście (krok 1) lub w ☰ → „Wczytaj trasę (.gpx)" wczytaj ślad wyścigu. Apka startuje z ostatnio zapisaną trasą, więc kolejny raz nic nie musisz robić.</li>
     <li><b>Pobierz miejsca.</b> Kliknij „Pobierz miejsca" (krok 2). Pobierzemy noclegi, sklepy, jedzenie i paliwo wzdłuż trasy. Noclegi szukamy zawsze do <b>5 km</b> w bok (warto nadłożyć po nocleg), resztę wg „Promień szukania" (domyślnie 500 m). Pobranie zapisuje się <b>automatycznie offline</b> — w terenie bez sieci dane będą dostępne.</li>
-    <li><b>Filtry.</b> U góry włączaj/wyłączaj kategorie (spożywcze, noclegi, paliwo, jedzenie) oraz „★ ulubione". Lista i kropki na mapie reagują od razu.</li>
+    <li><b>Własne miejsca.</b> Dane OSM bywają niekompletne (zwłaszcza małe noclegi). Możesz dograć własną listę: w Google My Maps zaznacz miejsca i wyeksportuj <b>KML</b>, albo użyj <b>GPX</b> z waypointami lub <b>CSV</b> (nazwa, lat, lon). ☰ → „➕ Dodaj własne miejsca" dołączy je do danych OSM (kategoria „własne", fioletowe).</li>
+    <li><b>Filtry.</b> U góry włączaj/wyłączaj kategorie (spożywcze, noclegi, paliwo, jedzenie, własne) oraz „★ ulubione". Lista i kropki na mapie reagują od razu.</li>
     <li><b>Pozycja.</b> Na rowerze włącz <b>„Śledź GPS"</b> — zobaczysz swoją pozycję i listę „przede mną" z odległością w kilometrach. Bez GPS możesz dotknąć mapy, by zasymulować pozycję.</li>
     <li><b>Co przede mną.</b> Lista pokazuje miejsca rosnąco wg kilometra: „+3,2 km" to ile zostało, obok metry od trasy i strona (L/P). „do 50/100/200 km" ustawia, jak daleko w przód patrzeć.</li>
     <li><b>Szczegóły.</b> Dotknij miejsce na liście lub mapie — zobaczysz godziny otwarcia, telefon i adres (o ile są w danych). Gwiazdką dodajesz do <b>ulubionych</b>.</li>
@@ -379,6 +384,7 @@ const CATS = {
   fuel:  {label:"Paliwo", color:css('--fuel'), match:t=>t.amenity==="fuel"},
   eat:   {label:"Jedzenie", color:css('--eat'),
           match:t=>["restaurant","cafe","fast_food","bar","pub","food_court","ice_cream","biergarten","canteen"].includes(t.amenity)},
+  spot:  {label:"Własne", color:css('--spot'), match:()=>false},
 };
 const ORDER=["food","fuel","eat","sleep"];
 const OVERPASS=[
@@ -400,7 +406,7 @@ const BOOKING_AID = "";
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 function R(){return parseInt(document.getElementById('radius').value,10);}
 function rangeM(){return parseInt(document.getElementById('range').value,10)*1000;}
-const active=new Set(["food","sleep","fuel","eat"]);
+const active=new Set(["food","sleep","fuel","eat","spot"]);
 let favOnly=false;
 
 let map, routeLine, hereMarker, hereAcc, poiLayer, kmLayer;
@@ -550,6 +556,106 @@ document.getElementById('jsonfile').addEventListener('change',ev=>{
   const f=ev.target.files[0]; if(!f) return; closeMenu();
   const rd=new FileReader();
   rd.onload=()=>{try{loadBundle(JSON.parse(rd.result));}catch(e){setStatus("Błąd JSON: "+e.message);}};
+  rd.readAsText(f);
+});
+
+// ---- import własnych miejsc (KML / GPX-wpt / CSV) ----
+function stripCdata(s){return (s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1");}
+function stripTags(s){return (s||"").replace(/<[^>]*>/g," ");}
+function decodeXml(s){return (s||"").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#3?9;/g,"'").replace(/&amp;/g,"&");}
+function cleanTxt(s){return decodeXml(stripTags(stripCdata(s))).replace(/\s+/g," ").trim();}
+function inferCat(s){
+  s=(s||"").toLowerCase();
+  if(/hotel|nocleg|pensjonat|hostel|motel|guest|apartament|kwatera|schronisko|camping|kemping|agrotur|willa|chata|dom\s+gości/.test(s)) return "sleep";
+  if(/stacja|paliw|orlen|\bbp\b|shell|lotos|circle\s*k|amic|moya|fuel|lpg|tankow|benzyn/.test(s)) return "fuel";
+  if(/restaur|\bbar\b|\bpub\b|kawiar|caf[eé]|pizz|bistro|jadł|kebab|burger|lodziar|piwiar|food|gospoda|karczma/.test(s)) return "eat";
+  if(/sklep|market|żabka|biedronka|lidl|kaufland|delikates|spożyw|piekar|grocer|\bshop\b|carrefour|dino|lewiatan|stokrotka|netto|aldi|auchan/.test(s)) return "food";
+  return "spot";
+}
+function normCat(s){
+  s=(s||"").toLowerCase().trim();
+  if(["food","sleep","fuel","eat","spot"].includes(s)) return s;
+  if(/nocleg|hotel|sleep/.test(s)) return "sleep";
+  if(/paliw|fuel|stacja/.test(s)) return "fuel";
+  if(/jedz|eat|restaur/.test(s)) return "eat";
+  if(/sklep|spożyw|food|market/.test(s)) return "food";
+  return "";
+}
+function parseKML(text){
+  const out=[]; const re=/<Placemark\b[\s\S]*?<\/Placemark>/gi; let m;
+  while((m=re.exec(text))){
+    const blk=m[0];
+    const nm=cleanTxt((blk.match(/<name>([\s\S]*?)<\/name>/i)||[])[1])||"Miejsce";
+    const desc=cleanTxt((blk.match(/<description>([\s\S]*?)<\/description>/i)||[])[1]);
+    const co=(blk.match(/<coordinates>([\s\S]*?)<\/coordinates>/i)||[])[1];
+    if(!co) continue;
+    const first=co.trim().split(/\s+/)[0].split(","); const lon=+first[0], lat=+first[1];
+    if(!isFinite(lat)||!isFinite(lon)) continue;
+    out.push({name:nm,lat,lon,cat:inferCat(nm+" "+desc),desc});
+  }
+  return out;
+}
+function parseWaypoints(text){
+  const out=[]; const re=/<wpt\b[\s\S]*?(?:\/>|<\/wpt>)/gi; let m;
+  while((m=re.exec(text))){
+    const blk=m[0];
+    const lat=+((blk.match(/lat="([-\d.]+)"/i)||[])[1]), lon=+((blk.match(/lon="([-\d.]+)"/i)||[])[1]);
+    if(!isFinite(lat)||!isFinite(lon)) continue;
+    const nm=cleanTxt((blk.match(/<name>([\s\S]*?)<\/name>/i)||[])[1])||"Punkt";
+    const desc=cleanTxt((blk.match(/<desc>([\s\S]*?)<\/desc>/i)||[])[1]);
+    out.push({name:nm,lat,lon,cat:inferCat(nm+" "+desc),desc});
+  }
+  return out;
+}
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim()); if(!lines.length) return [];
+  const delim=(lines[0].indexOf(";")>=0 && lines[0].split(";").length>lines[0].split(",").length)?";":",";
+  const split=l=>l.split(delim).map(c=>c.trim().replace(/^"|"$/g,""));
+  const head=split(lines[0]).map(h=>h.toLowerCase());
+  const li=head.findIndex(h=>/^lat/.test(h)), loi=head.findIndex(h=>/^(lon|lng|long)/.test(h));
+  const ni=head.findIndex(h=>/name|nazwa|title|tytuł/.test(h)), ci=head.findIndex(h=>/cat|kateg|type|typ/.test(h));
+  const hasHeader = li>=0 && loi>=0;
+  const out=[], start=hasHeader?1:0;
+  for(let i=start;i<lines.length;i++){
+    const c=split(lines[i]); let lat,lon,name,cat="";
+    if(hasHeader){ lat=+c[li]; lon=+c[loi]; name=(ni>=0?c[ni]:"")||"Miejsce"; cat=ci>=0?c[ci]:""; }
+    else { name=c[0]||"Miejsce"; lat=+c[1]; lon=+c[2]; }
+    if(!isFinite(lat)||!isFinite(lon)) continue;
+    out.push({name,lat,lon,cat:normCat(cat)||inferCat(name),desc:""});
+  }
+  return out;
+}
+function addCustomPlaces(list,srcLabel){
+  if(!route){ setStatus("Najpierw wczytaj trasę (krok 1), potem dodaj własne miejsca."); return; }
+  if(!list||!list.length){ setStatus("Nie znalazłem miejsc w pliku (KML/GPX-wpt/CSV)."); return; }
+  let added=0;
+  for(const it of list){
+    const pr=project(it.lat,it.lon,null);
+    const cat=CATS[it.cat]?it.cat:"spot";
+    const np={name:it.name||"Miejsce",cats:[cat],lat:it.lat,lon:it.lon,km:pr.km,detourM:pr.detourM,side:pr.side,
+      tags:Object.assign({_custom:"1"}, it.desc?{description:it.desc}:{})};
+    const id=pid(np); if(pidIndex.has(id)) continue;
+    pois.push(np); pidIndex.set(id,np); added++;
+  }
+  pois.sort((a,b)=>a.km-b.km); indexPois(); computeGaps(); renderPOIs();
+  document.getElementById('export').disabled=pois.length===0;
+  persistBundle();
+  if(lastKm!=null) renderPanel(); else renderGuide();
+  setStatus(`Dodano ${added} własnych miejsc${srcLabel?" ("+srcLabel+")":""}. Razem ${pois.length} miejsc, zapisano offline.`);
+}
+document.getElementById('customfile').addEventListener('change',ev=>{
+  const f=ev.target.files[0]; if(!f) return; closeMenu();
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const txt=rd.result, nm=f.name.toLowerCase(); let list;
+      if(nm.endsWith(".kml")||/<kml[\s>]/i.test(txt)) list=parseKML(txt);
+      else if(nm.endsWith(".gpx")||/<gpx[\s>]/i.test(txt)) list=parseWaypoints(txt);
+      else list=parseCSV(txt);
+      addCustomPlaces(list,f.name);
+    }catch(e){ setStatus("Błąd importu: "+e.message); }
+    ev.target.value="";
+  };
   rd.readAsText(f);
 });
 function loadBundle(b, skipPersist){
@@ -711,8 +817,9 @@ function detailHtml(p){
   const gmaps=`https://www.google.com/maps/search/?api=1&query=${p.lat}%2C${p.lon}`;
   const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat}%2C${p.lon}`;
   const booking=bookingUrl(p.name,t["addr:city"]);
-  let info=`<div class="dr">km ${p.km.toFixed(1)} · ${p.detourM} m od trasy ${p.side||""}</div>`;
+  let info=`<div class="dr">km ${p.km.toFixed(1)} · ${p.detourM} m od trasy ${p.side||""}${t._custom?" · 📌 własne":""}</div>`;
   if(lastKm!=null){ const eta=etaAheadDelta(aheadDelta(p.km,lastKm),lastKm); if(eta!=null) info+=`<div class="dr">⏱ ≈ ${fmtDur(eta)} stąd</div>`; }
+  if(t.description) info+=`<div class="dr">📝 ${esc(t.description)}</div>`;
   if(t.stars) info+=`<div class="dr">⭐ ${esc(t.stars)}</div>`;
   if(t.opening_hours) info+=`<div class="dr">🕒 ${esc(t.opening_hours)}</div>`;
   if(t.cuisine) info+=`<div class="dr">🍽 ${esc(t.cuisine.replace(/;/g,", "))}</div>`;
@@ -866,7 +973,8 @@ function stopGPS(){
 function tagSubset(t){
   t=t||{};
   const keep=["opening_hours","phone","website","email","stars","cuisine","brand","wheelchair","internet_access",
-    "contact:phone","contact:website","contact:email","addr:street","addr:housenumber","addr:postcode","addr:city"];
+    "contact:phone","contact:website","contact:email","addr:street","addr:housenumber","addr:postcode","addr:city",
+    "description","_custom"];
   const o={}; for(const k of keep) if(t[k]) o[k]=t[k]; return o;
 }
 function buildBundle(){
