@@ -72,6 +72,7 @@ export default function App() {
   const [status, setStatus] = useState("Wczytaj trasę (.gpx), aby zacząć.");
   const [fetching, setFetching] = useState(false);
   const [missing, setMissing] = useState(0);
+  const [progress, setProgress] = useState<{ done: number; total: number; found: number } | null>(null);
   const fetchSessionRef = useRef<FetchSession | null>(null);
   const [email, setEmail] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -207,7 +208,7 @@ export default function App() {
     try {
       const res = await fetchPois(
         route,
-        { cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: 500, onProgress: (done, total, n) => setStatus(`Pobieram… ${done}/${total} · ${n} miejsc`) },
+        { cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: 500, onProgress: (done, total, found) => setProgress({ done, total, found }) },
         resume ? fetchSessionRef.current ?? undefined : undefined,
       );
       fetchSessionRef.current = res.session;
@@ -216,7 +217,7 @@ export default function App() {
         ? `${res.pois.length} miejsc. ${res.failed} paczek nie pobrano — kliknij „Dobierz brakujące".`
         : `${res.pois.length} miejsc. Zapisz offline, włącz GPS lub dotknij mapy.`);
     } catch (e: any) { setStatus("Błąd pobierania: " + e.message); }
-    finally { setFetching(false); }
+    finally { setFetching(false); setProgress(null); }
   }
   async function onImport(file: File) {
     if (!route || !ds) { setStatus("Najpierw wczytaj trasę."); return; }
@@ -367,10 +368,12 @@ export default function App() {
       <header className="bar">
         <button className="iconbtn" aria-label="Menu" onClick={() => setMenuOpen(true)}>☰</button>
         <strong onClick={() => { setDetail(null); setShowPlan(false); }}>MiroBike</strong>
-        <span className={"state " + (route ? "ok" : "warn")}>
-          {route ? `✓ ${name}${pois.length ? ` · ${pois.length}` : ""}` : "⚠ brak trasy"}
-        </span>
-        {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera…</span>}
+        {!fetching && (
+          <span className={"state " + (route ? "ok" : "warn")}>
+            {route ? `✓ ${name}${pois.length ? ` · ${pois.length}` : ""}` : "⚠ brak trasy"}
+          </span>
+        )}
+        {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => setFavOnly((v) => !v)}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
