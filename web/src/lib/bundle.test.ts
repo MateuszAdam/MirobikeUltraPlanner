@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { buildBundle, routeFromBundle, poisFromBundle, computeGaps } from "./bundle";
 import { parseGPX } from "./gpx";

@@ -1,24 +1,31 @@
 import { hav } from "./geo";
 import type { Route, RoutePoint } from "./types";
 
-/** Parsuje ślad GPX (trkpt) wraz z wysokością (<ele>). */
+/**
+ * Parsuje ślad GPX przez DOMParser (odporny na kolejność atrybutów i formatowanie).
+ * Preferuje punkty trasy (trkpt), potem route (rtept), na końcu waypointy (wpt).
+ * Wysokość czytana z dziecka <ele> danego punktu.
+ */
 export function parseGPX(text: string): Route {
-  const re = /lat="([-\d.]+)"\s+lon="([-\d.]+)"/g;
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) {
+    throw new Error("Nieprawidłowy plik GPX (błąd XML).");
+  }
+  let nodes = Array.from(doc.getElementsByTagName("trkpt"));
+  if (nodes.length < 2) nodes = Array.from(doc.getElementsByTagName("rtept"));
+  if (nodes.length < 2) nodes = Array.from(doc.getElementsByTagName("wpt"));
+
   const pts: RoutePoint[] = [];
-  const ends: number[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    pts.push({ lat: +m[1], lon: +m[2] });
-    ends.push(re.lastIndex);
+  for (const n of nodes) {
+    const lat = parseFloat(n.getAttribute("lat") || "");
+    const lon = parseFloat(n.getAttribute("lon") || "");
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const eleEl = n.getElementsByTagName("ele")[0];
+    const ele = eleEl ? parseFloat(eleEl.textContent || "") : NaN;
+    pts.push({ lat, lon, ele: isFinite(ele) ? ele : undefined });
   }
   if (pts.length < 2) throw new Error("Za mało punktów w GPX.");
-  const ele = /<ele>\s*([-\d.]+)\s*<\/ele>/g;
-  for (let i = 0; i < pts.length; i++) {
-    ele.lastIndex = ends[i];
-    const em = ele.exec(text);
-    const limit = i + 1 < ends.length ? ends[i + 1] : text.length;
-    if (em && em.index < limit) pts[i].ele = +em[1];
-  }
+
   const cum = [0];
   for (let i = 1; i < pts.length; i++) {
     cum.push(cum[i - 1] + hav(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon));
