@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import { buildStyle } from "./lib/mapStyle";
 import { parseGPX } from "./lib/gpx";
 import { downsample, project, pid } from "./lib/geo";
-import { fetchPois } from "./lib/overpass";
+import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS } from "./lib/categories";
 import { parseImport } from "./lib/importPlaces";
@@ -71,6 +71,8 @@ export default function App() {
   const [saved, setSaved] = useState<StoredBundle[]>([]);
   const [status, setStatus] = useState("Wczytaj trasę (.gpx), aby zacząć.");
   const [fetching, setFetching] = useState(false);
+  const [missing, setMissing] = useState(0);
+  const fetchSessionRef = useRef<FetchSession | null>(null);
   const [email, setEmail] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -188,6 +190,7 @@ export default function App() {
     setRoute(r); setDs(d); setTime(buildTimeProfile(d).time);
     setPois(ps); setGaps(computeGaps(ps)); setName(nm); setFavorites(favs); setHereKm(null);
     alertedRef.current.clear();
+    fetchSessionRef.current = null; setMissing(0);
   }
   function loadRoute(r: Route, nm: string) {
     const tp = buildTimeProfile(downsample(r, 150));
@@ -198,16 +201,20 @@ export default function App() {
     try { loadRoute(parseGPX(await file.text()), file.name.replace(/\.gpx$/i, "")); }
     catch (e: any) { setStatus("Błąd GPX: " + e.message); }
   }
-  async function doFetch() {
+  async function doFetch(resume = false) {
     if (!route) return;
     setFetching(true);
     try {
-      const found = await fetchPois(route, {
-        cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: 500,
-        onProgress: (done, total, n) => setStatus(`Pobieram… ${done}/${total} · ${n} miejsc`),
-      });
-      setPois(found); setGaps(computeGaps(found));
-      setStatus(`${found.length} miejsc. Zapisz offline, włącz GPS lub dotknij mapy.`);
+      const res = await fetchPois(
+        route,
+        { cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: 500, onProgress: (done, total, n) => setStatus(`Pobieram… ${done}/${total} · ${n} miejsc`) },
+        resume ? fetchSessionRef.current ?? undefined : undefined,
+      );
+      fetchSessionRef.current = res.session;
+      setPois(res.pois); setGaps(computeGaps(res.pois)); setMissing(res.failed);
+      setStatus(res.failed > 0
+        ? `${res.pois.length} miejsc. ${res.failed} paczek nie pobrano — kliknij „Dobierz brakujące".`
+        : `${res.pois.length} miejsc. Zapisz offline, włącz GPS lub dotknij mapy.`);
     } catch (e: any) { setStatus("Błąd pobierania: " + e.message); }
     finally { setFetching(false); }
   }
@@ -363,19 +370,20 @@ export default function App() {
         <span className={"state " + (route ? "ok" : "warn")}>
           {route ? `✓ ${name}${pois.length ? ` · ${pois.length}` : ""}` : "⚠ brak trasy"}
         </span>
-        {fetching && <span className="fetchdot" />}
+        {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera…</span>}
         <span className="spacer" />
+        <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => setFavOnly((v) => !v)}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
       </header>
 
       <div className="quick">
+        {missing > 0 && <button className="chip refetch" disabled={fetching} onClick={() => doFetch(true)}>⬇ Dobierz brakujące ({missing})</button>}
         <button className={"chip gps " + (gpsOn ? "on" : "")} disabled={!route} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
         {FILTER_CATS.map((c) => (
           <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
             <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
           </button>
         ))}
-        <button className={favOnly ? "chip on" : "chip"} onClick={() => setFavOnly((v) => !v)}>★</button>
         <label className="rng">do
           <select value={range} onChange={(e) => setRange(+e.target.value)}>
             <option value={50}>50 km</option><option value={100}>100 km</option><option value={200}>200 km</option>
@@ -433,7 +441,7 @@ export default function App() {
                 <span className="gn">{pois.length ? "✓" : "2"}</span>
                 <div>
                   <b>Miejsca</b><br /><small>{pois.length ? `${pois.length} miejsc` : "Pobierz noclegi, sklepy, jedzenie, paliwo."}</small>
-                  {route && <button className="gbtn" disabled={fetching} onClick={doFetch}>{fetching ? "Pobieram…" : pois.length ? "Pobierz ponownie" : "Pobierz miejsca"}</button>}
+                  {route && <button className="gbtn" disabled={fetching} onClick={() => doFetch()}>{fetching ? "Pobieram…" : pois.length ? "Pobierz ponownie" : "Pobierz miejsca"}</button>}
                 </div>
               </div>
               <div className={"gstep " + (guideStep === 3 ? "active" : "")}>

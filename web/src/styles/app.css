@@ -53,6 +53,10 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .chip.gps { font-weight: 700; border-color: var(--here); color: var(--here); }
 .chip.gps.on { background: var(--here); color: #3a2e00; border-color: transparent; }
 .chip.plan { font-weight: 700; }
+.chip.fav { font-size: 17px; line-height: 1; padding: 9px 12px; color: #ffd23f; border-color: #6b5a22; }
+.chip.fav.on { background: #ffd23f; color: #3a2e00; border-color: transparent; text-shadow: 0 0 1px #0003; }
+.chip.refetch { background: var(--fuel); color: #3a2400; border-color: transparent; font-weight: 700; }
+.fetching-lbl { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--route); white-space: nowrap; }
 .rng { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .rng select { background: #232732; border: 1px solid var(--line); color: var(--txt); border-radius: 8px; padding: 6px 8px; }
 
