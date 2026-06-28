@@ -65,6 +65,7 @@ export default function App() {
 
   const [detail, setDetail] = useState<Poi | null>(null);
   const [showPlan, setShowPlan] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [mapView, setMapView] = useState<"list" | "map">("list");
   const [saved, setSaved] = useState<StoredBundle[]>([]);
   const [status, setStatus] = useState("Wczytaj trasę (.gpx), aby zacząć.");
@@ -343,50 +344,29 @@ export default function App() {
   return (
     <div className="layout">
       <header className="bar">
-        <strong onClick={() => { setDetail(null); setShowPlan(false); }} style={{ cursor: "pointer" }}>MiroBike</strong>
+        <button className="iconbtn" aria-label="Menu" onClick={() => setMenuOpen(true)}>☰</button>
+        <strong onClick={() => { setDetail(null); setShowPlan(false); }}>MiroBike</strong>
         <span className={"state " + (route ? "ok" : "warn")}>
-          {route ? `✓ ${name}${pois.length ? ` · ${pois.length} miejsc` : " — pobierz miejsca"}` : "⚠ brak trasy"}
+          {route ? `✓ ${name}${pois.length ? ` · ${pois.length}` : ""}` : "⚠ brak trasy"}
         </span>
         {fetching && <span className="fetchdot" />}
-        <button className="chip" onClick={() => setShowPlan(true)}>📑 Plan</button>
         <span className="spacer" />
-        {isSupabaseConfigured() ? (
-          userEmail ? (
-            <><button onClick={doSync}>⟳ Sync</button><button onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button></>
-          ) : (
-            <><input placeholder="e-mail" value={email} onChange={(e) => setEmail(e.target.value)} /><button onClick={login}>Zaloguj</button></>
-          )
-        ) : null}
+        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
       </header>
 
       <div className="quick">
-        <button className={gpsOn ? "chip on" : "chip"} disabled={!route} onClick={toggleGps}>{gpsOn ? "GPS ●" : "Śledź GPS"}</button>
+        <button className={"chip gps " + (gpsOn ? "on" : "")} disabled={!route} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
         {FILTER_CATS.map((c) => (
           <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
             <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
           </button>
         ))}
-        <button className={favOnly ? "chip on" : "chip"} onClick={() => setFavOnly((v) => !v)}>★ ulubione</button>
+        <button className={favOnly ? "chip on" : "chip"} onClick={() => setFavOnly((v) => !v)}>★</button>
         <label className="rng">do
           <select value={range} onChange={(e) => setRange(+e.target.value)}>
             <option value={50}>50 km</option><option value={100}>100 km</option><option value={200}>200 km</option>
           </select>
         </label>
-      </div>
-
-      <div className="toolbar">
-        <label className="btn">Wczytaj trasę (.gpx)<input hidden type="file" accept=".gpx" onChange={(e) => e.target.files?.[0] && onGpx(e.target.files[0])} /></label>
-        <button className="go" disabled={!route || fetching} onClick={doFetch}>{fetching ? "Pobieram…" : "Pobierz miejsca"}</button>
-        <label className="btn">➕ Dodaj własne<input hidden type="file" accept=".kml,.gpx,.csv,.txt" onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} /></label>
-        <button disabled={!route} onClick={saveCurrent}>Zapisz offline</button>
-        <select value="" onChange={(e) => e.target.value && loadSaved(e.target.value)}>
-          <option value="">Zapisane offline…</option>
-          {saved.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.bundle.pois.length} miejsc{s.dirty ? " *" : ""}</option>)}
-        </select>
-        {name && saved.some((s) => s.name === name) && <>
-          <button onClick={() => renameSaved(name)}>✏ Zmień nazwę</button>
-          <button onClick={() => removeSaved(name)}>🗑 Usuń</button>
-        </>}
       </div>
 
       <div className="status">{status}</div>
@@ -430,15 +410,24 @@ export default function App() {
             <div className="guide">
               <div className={"gstep " + (route ? "done" : "active")}>
                 <span className="gn">{route ? "✓" : "1"}</span>
-                <div><b>Trasa</b><br /><small>{route ? `${name} · ${totalKm.toFixed(0)} km` : "Wczytaj ślad GPX wyścigu."}</small></div>
+                <div>
+                  <b>Trasa</b><br /><small>{route ? `${name} · ${totalKm.toFixed(0)} km` : "Wczytaj ślad GPX wyścigu."}</small>
+                  <label className="gbtn"><input hidden type="file" accept=".gpx" onChange={(e) => e.target.files?.[0] && onGpx(e.target.files[0])} />{route ? "Zmień trasę (.gpx)" : "Wczytaj trasę (.gpx)"}</label>
+                </div>
               </div>
               <div className={"gstep " + (!route ? "" : pois.length ? "done" : "active")}>
                 <span className="gn">{pois.length ? "✓" : "2"}</span>
-                <div><b>Miejsca</b><br /><small>{pois.length ? `${pois.length} miejsc` : "Pobierz noclegi, sklepy, jedzenie, paliwo."}</small></div>
+                <div>
+                  <b>Miejsca</b><br /><small>{pois.length ? `${pois.length} miejsc` : "Pobierz noclegi, sklepy, jedzenie, paliwo."}</small>
+                  {route && <button className="gbtn" disabled={fetching} onClick={doFetch}>{fetching ? "Pobieram…" : pois.length ? "Pobierz ponownie" : "Pobierz miejsca"}</button>}
+                </div>
               </div>
               <div className={"gstep " + (guideStep === 3 ? "active" : "")}>
                 <span className="gn">3</span>
-                <div><b>Pozycja</b><br /><small>Włącz „Śledź GPS" albo dotknij mapy, by zobaczyć co masz przed sobą.</small></div>
+                <div>
+                  <b>Pozycja</b><br /><small>Włącz GPS albo dotknij mapy, by zobaczyć co masz przed sobą.</small>
+                  {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
+                </div>
               </div>
               {pois.length > 0 && (
                 <ul className="list">
@@ -462,6 +451,41 @@ export default function App() {
       <div className="viewbar">
         <button className={mapView === "list" ? "active" : ""} onClick={() => setMapView("list")}>📋 Lista</button>
         <button className={mapView === "map" ? "active" : ""} onClick={() => setMapView("map")}>🗺 Mapa</button>
+      </div>
+
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+      <div className={"menu " + (menuOpen ? "open" : "")}>
+        <div className="mhead"><b>Menu</b><button className="iconbtn" onClick={() => setMenuOpen(false)}>✕</button></div>
+
+        <div className="msec">Trasa</div>
+        <label className="mbtn"><input hidden type="file" accept=".gpx" onChange={(e) => { if (e.target.files?.[0]) { onGpx(e.target.files[0]); setMenuOpen(false); } }} />📂 Wczytaj trasę (.gpx)</label>
+
+        <div className="msec">Miejsca</div>
+        <button className="mbtn go" disabled={!route || fetching} onClick={() => { doFetch(); setMenuOpen(false); }}>{fetching ? "Pobieram…" : "⬇ Pobierz miejsca"}</button>
+        <label className="mbtn"><input hidden type="file" accept=".kml,.gpx,.csv,.txt" onChange={(e) => { if (e.target.files?.[0]) { onImport(e.target.files[0]); setMenuOpen(false); } }} />➕ Dodaj własne (KML/GPX/CSV)</label>
+        <button className="mbtn" disabled={!route} onClick={saveCurrent}>💾 Zapisz offline</button>
+
+        <div className="msec">Zapisane offline</div>
+        <select className="mbtn" value="" onChange={(e) => { if (e.target.value) { loadSaved(e.target.value); setMenuOpen(false); } }}>
+          <option value="">Wczytaj zapisaną…</option>
+          {saved.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.bundle.pois.length} miejsc{s.dirty ? " *" : ""}</option>)}
+        </select>
+        {name && saved.some((s) => s.name === name) && <>
+          <button className="mbtn" onClick={() => renameSaved(name)}>✏ Zmień nazwę</button>
+          <button className="mbtn" onClick={() => removeSaved(name)}>🗑 Usuń bieżącą</button>
+        </>}
+
+        {isSupabaseConfigured() && <>
+          <div className="msec">Konto</div>
+          {userEmail ? <>
+            <div className="mnote">{userEmail}</div>
+            <button className="mbtn" onClick={doSync}>⟳ Synchronizuj</button>
+            <button className="mbtn" onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button>
+          </> : <>
+            <input className="mbtn" placeholder="e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <button className="mbtn" onClick={login}>Zaloguj (link na e-mail)</button>
+          </>}
+        </>}
       </div>
 
       {detail && (
