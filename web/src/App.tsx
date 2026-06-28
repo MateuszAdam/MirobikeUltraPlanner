@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import { buildStyle } from "./lib/mapStyle";
 import { parseGPX } from "./lib/gpx";
-import { downsample, project, pid } from "./lib/geo";
+import { downsample, project, pid, aheadDelta } from "./lib/geo";
 import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
-import { CATS } from "./lib/categories";
-import { aheadList, nextShop, gapBeforeStretch, planRows, plPlural, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
+import { CATS, ORDER } from "./lib/categories";
+import { aheadList, nextShop, nextOfCat, gapBeforeStretch, planRows, plPlural, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
@@ -57,6 +57,7 @@ export default function App() {
   const [favOnly, setFavOnly] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [range, setRange] = useState(100);
+  const [fetchRadius, setFetchRadius] = useState(500);
 
   const [hereKm, setHereKm] = useState<number | null>(null);
   const [hereOff, setHereOff] = useState(0);
@@ -225,7 +226,7 @@ export default function App() {
     try {
       const res = await fetchPois(
         route,
-        { cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: 500, onProgress: (done, total, found) => setProgress({ done, total, found }) },
+        { cats: new Set<CatKey>(["food", "sleep", "fuel", "eat"]), radiusOther: fetchRadius, onProgress: (done, total, found) => setProgress({ done, total, found }) },
         resume ? fetchSessionRef.current ?? undefined : undefined,
       );
       fetchSessionRef.current = res.session;
@@ -372,6 +373,34 @@ export default function App() {
       setStatus("Link skopiowany: " + data.url);
     } catch { /* użytkownik anulował */ }
   }
+  // Eksport całej paczki (trasa + miejsca + ulubione) do pliku .json — backup/przenoszenie.
+  function exportFile() {
+    if (!route || !name) return;
+    const bundle = buildBundle(name, route, pois, computeGaps(pois));
+    const payload = { ...bundle, favorites: [...favorites] };
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(payload)], { type: "application/json" }));
+    a.download = `${name || "trasa"}.mirobike.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setStatus(`Wyeksportowano „${name}" do pliku.`);
+  }
+  // Wczytanie wcześniej wyeksportowanego pliku .json — bez ponownego pobierania.
+  async function importFile(file: File) {
+    try {
+      const obj = JSON.parse(await file.text());
+      if (!obj?.route || !obj?.pois) { setStatus("To nie jest plik MiroBike (.json)."); return; }
+      const favs: string[] = Array.isArray(obj.favorites) ? obj.favorites : [];
+      const { favorites: _omit, ...bundle } = obj;
+      const nm = bundle.name || file.name.replace(/\.json$/i, "");
+      const now = new Date().toISOString();
+      await putBundle({ name: nm, bundle, favorites: favs, updated_at: bundle.updated_at || now, dirty: true });
+      await refreshSaved();
+      applyRoute(routeFromBundle(bundle), nm, poisFromBundle(bundle), new Set(favs));
+      pushSoon();
+      setStatus(`Wczytano z pliku: ${nm} (${bundle.pois.length} miejsc) — zapisano offline.`);
+    } catch (e: any) { setStatus("Błąd wczytania pliku: " + e.message); }
+  }
 
   // ---- pochodne listy ----
   const ahead = useMemo(
@@ -391,6 +420,19 @@ export default function App() {
     () => planRows(favPois, ds, time, hereKm, route?.isLoop ?? false, totalKm),
     [favPois, ds, time, hereKm, route, totalKm],
   );
+
+  const favAhead = useMemo(() => {
+    if (hereKm == null || !route) return null;
+    return favPois
+      .map((p) => ({ p, delta: aheadDelta(p.km, hereKm, route.isLoop, totalKm) }))
+      .filter((x) => x.delta > 0.02)
+      .sort((a, b) => a.delta - b.delta)[0] ?? null;
+  }, [favPois, hereKm, route, totalKm]);
+  const nextByCat = useMemo(() => {
+    if (hereKm == null || !route) return [];
+    return ORDER.filter((c) => active.has(c)).map((c) => ({ c, n: nextOfCat(pois, c, hereKm, route.isLoop, totalKm) }));
+  }, [pois, active, hereKm, route, totalKm]);
+  const offRoute = hereOff > 250;
 
   const guideStep = !route ? 1 : !pois.length ? 2 : 3;
   const savedEntry = saved.find((s) => s.name === name);
@@ -439,11 +481,25 @@ export default function App() {
                 <div className="meta">
                   {(totalKm - hereKm).toFixed(1)} km do końca
                   {time.length ? ` · ⏱ ≈ ${fmtDur(timeAtKm(ds!, time, totalKm)! - timeAtKm(ds!, time, hereKm)!)}` : ""}
-                  {` · ${hereOff} m od trasy`}
+                  {offRoute
+                    ? <span className="offroute"> · {hereOff} m od trasy (poza trasą?)</span>
+                    : ` · ${hereOff} m od trasy`}
                 </div>
               </div>
+              {nextByCat.length > 0 && (
+                <div className="nextrow">
+                  {nextByCat.map(({ c, n }) => (
+                    <div className="cell" key={c}>
+                      <div className="cl" style={{ color: CAT_COLOR[c] }}>{CATS[c].label}</div>
+                      <div className="cv">{n ? "+" + n.delta.toFixed(1) : "—"}</div>
+                      <div className="cn">{n ? n.p.name : "brak"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {shopWarn && shopWarn.delta > 20 && <div className="warn">⚠️ Następny sklep za <b>{shopWarn.delta.toFixed(1)} km</b> ({shopWarn.p.name}). Zatankuj zapasy.</div>}
               {gapWarn && <div className="warn">⚠️ Za <b>{gapWarn.kmTo.toFixed(1)} km</b> ostatni sklep przed odcinkiem <b>{gapWarn.gapKm.toFixed(0)} km bez zaopatrzenia</b>.</div>}
+              {favAhead && <div className="warn fav">★ Do ulubionego: <b>{favAhead.p.name}</b> za <b>{favAhead.delta.toFixed(1)} km</b>{(() => { const e = etaAheadDelta(ds!, time, favAhead.delta, hereKm!, totalKm); return e != null ? ` (⏱ ${fmtDur(e)})` : ""; })()}.</div>}
               {!ahead.length ? (
                 <p className="empty">Nic w zasięgu {range} km dla wybranych filtrów.</p>
               ) : (
@@ -518,6 +574,13 @@ export default function App() {
         <label className="mbtn"><input hidden type="file" accept=".gpx" onChange={(e) => { if (e.target.files?.[0]) { onGpx(e.target.files[0]); setMenuOpen(false); } }} />📂 Wczytaj trasę (.gpx)</label>
 
         <div className="msec">Miejsca</div>
+        <label className="mrow">Promień szukania (sklepy/jedzenie/paliwo)
+          <select value={fetchRadius} onChange={(e) => setFetchRadius(+e.target.value)}>
+            <option value={100}>100 m</option><option value={300}>300 m</option><option value={500}>500 m</option>
+            <option value={1000}>1 km</option><option value={2000}>2 km</option>
+          </select>
+        </label>
+        <div className="mhelp">Noclegi szukane zawsze do 5 km. Po zmianie kliknij „Pobierz miejsca".</div>
         <button className="mbtn go" disabled={!route || fetching} onClick={() => { doFetch(); setMenuOpen(false); }}>{fetching ? "Pobieram…" : "⬇ Pobierz miejsca"}</button>
         {savedEntry && <div className="mnote">💾 Zapisane offline ({savedEntry.bundle.pois.length} miejsc){savedEntry.dirty ? " · do wysłania" : userEmail ? " · w chmurze" : ""}</div>}
 
@@ -530,6 +593,8 @@ export default function App() {
           <button className="mbtn" onClick={() => renameSaved(name)}>✏ Zmień nazwę</button>
           <button className="mbtn" onClick={() => removeSaved(name)}>🗑 Usuń bieżącą</button>
         </>}
+        <button className="mbtn" disabled={!route} onClick={() => { exportFile(); setMenuOpen(false); }}>⤓ Eksportuj do pliku (.json)</button>
+        <label className="mbtn"><input hidden type="file" accept=".json" onChange={(e) => { if (e.target.files?.[0]) { importFile(e.target.files[0]); setMenuOpen(false); } }} />📥 Wczytaj z pliku (.json)</label>
 
         {isSupabaseConfigured() && <>
           <div className="msec">Konto (opcjonalne)</div>
@@ -563,13 +628,18 @@ export default function App() {
               const eta = etaAheadDelta(ds!, time, d, hereKm, totalKm);
               return d > 0 && eta != null ? <div className="dr">⏱ ≈ {fmtDur(eta)} stąd</div> : null;
             })()}
+            {detail.tags.stars && <div className="dr">⭐ {detail.tags.stars}</div>}
             {detail.tags.opening_hours && <div className="dr">🕒 {detail.tags.opening_hours}</div>}
+            {detail.tags.cuisine && <div className="dr">🍽 {detail.tags.cuisine.replace(/;/g, ", ")}</div>}
             {detail.tags.description && <div className="dr">📝 {detail.tags.description}</div>}
             {detail.tags["addr:city"] && <div className="dr">📍 {detail.tags["addr:street"] || ""} {detail.tags["addr:city"]}</div>}
+            {(detail.tags.email || detail.tags["contact:email"]) && <div className="dr">✉ {detail.tags.email || detail.tags["contact:email"]}</div>}
             <div className="acts">
               <a className="act" target="_blank" rel="noopener" href={`https://www.google.com/maps/dir/?api=1&destination=${detail.lat}%2C${detail.lon}`}>🧭 Nawiguj</a>
+              <a className="act" target="_blank" rel="noopener" href={`https://www.google.com/maps/search/?api=1&query=${detail.lat}%2C${detail.lon}`}>🗺 Mapy Google</a>
               {detail.cats.includes("sleep") && <a className="act" target="_blank" rel="noopener" href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(detail.name)}`}>🛏 Booking</a>}
               {(detail.tags.phone || detail.tags["contact:phone"]) && <a className="act" href={`tel:${detail.tags.phone || detail.tags["contact:phone"]}`}>☎ Zadzwoń</a>}
+              {(detail.tags.website || detail.tags["contact:website"]) && <a className="act" target="_blank" rel="noopener" href={detail.tags.website || detail.tags["contact:website"]}>🌐 Strona</a>}
             </div>
             <button className={"favbig " + (favorites.has(pid(detail)) ? "is" : "")} onClick={() => toggleFav(pid(detail))}>
               {favorites.has(pid(detail)) ? "★ w ulubionych" : "☆ dodaj do ulubionych"}

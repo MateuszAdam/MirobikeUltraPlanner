@@ -1,7 +1,7 @@
 :root {
   --ink: #14161b; --ink2: #1c1f27; --line: #2b303b; --txt: #e9ecf1; --dim: #9aa3b2;
   --food: #3ec98a; --sleep: #7c8cff; --fuel: #f5a623; --eat: #ff6b6b; --spot: #c77dff;
-  --here: #ffd23f; --fav: #ffd23f;
+  --here: #ffd23f; --fav: #ffd23f; --warn: #ff5a5a;
   --route: #19e0d6; --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -69,6 +69,18 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .here .meta { font-family: var(--mono); font-size: 12px; color: var(--dim); margin-top: 6px; }
 .warn { margin: 10px 12px; padding: 11px 13px; border-radius: 10px; font-size: 12.5px; background: #2a1416; color: #ffc9c9; }
 .warn b { color: #fff; }
+.warn.fav { background: #2a2410; color: #ffe9a8; }
+.offroute { color: var(--warn); font-weight: 700; }
+
+.nextrow { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.nextrow .cell { flex: 1; min-width: 0; padding: 9px 5px; text-align: center; border-right: 1px solid var(--line); }
+.nextrow .cell:last-child { border-right: 0; }
+.nextrow .cl { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+.nextrow .cv { font-family: var(--mono); font-size: 17px; font-weight: 700; margin-top: 3px; }
+.nextrow .cn { font-size: 10px; color: var(--dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mrow { font-size: 12px; color: var(--dim); display: flex; flex-direction: column; gap: 6px; }
+.mrow select { background: #232732; border: 1px solid var(--line); color: var(--txt); border-radius: 8px; padding: 11px; font-size: 14px; }
 
 .list li { cursor: pointer; }
 .list li .star { font-size: 18px; color: #41464f; }
