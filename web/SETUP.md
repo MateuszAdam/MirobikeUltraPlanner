@@ -76,6 +76,8 @@ Workflow `.github/workflows/keepalive.yml` pinguje `heartbeat` codziennie.
 - **Na komputerze**: logujesz się → wczytujesz GPX → „Pobierz miejsca" (ciężki Overpass) → „Zapisz" → „Sync" wysyła lekką paczkę (jsonb) na konto.
 - **Na telefonie**: logujesz się → „Sync" pobiera paczki do IndexedDB → działasz **offline** na małych danych.
 
-## Stan rewrite (gałąź `rewrite`)
-✅ Scaffold, core logic (GPX/geo/ETA/import/Overpass), Dexie + `persist()`, Supabase client + sync, MapLibre+PMTiles, PWA, schemat SQL, keep-alive.
-⏳ Do przeniesienia z `main` (kolejne kroki): przewodnik krokowy, filtry kategorii, GPS „śledź", panel „przede mną", Plan przystanków, arkusz szczegółów, import w UI, znaczniki km, ostrzeżenia o brakach sklepów.
+## Stan rewrite (gałąź `rewrite`) — PARYTET FUNKCJONALNY ✅
+✅ Scaffold, core logic (GPX/geo/ETA/import/Overpass/planner), Dexie + `persist()`, Supabase client + sync, MapLibre+PMTiles, PWA, schemat SQL, keep-alive.
+✅ UI: przewodnik krokowy, filtry kategorii, GPS „śledź" + kółko dokładności + powiadomienia o ulubionych, panel „przede mną" z ETA, ostrzeżenia (następny sklep / luka przed odcinkiem), Plan przystanków, arkusz szczegółów, import KML/CSV/GPX w UI, znaczniki km, zapis/wczytanie/zmiana nazwy/usuwanie offline, przełącznik mapa/lista (mobile).
+✅ 37 testów jednostkowych (rdzeń + planner). `npm run build` i `npm test` przechodzą.
+⏳ Poler/później: code-split (bundle ~1.1 MB przez MapLibre), migracja `protomaps-themes-base` → `@protomaps/basemaps`, testy komponentów (jsdom).
