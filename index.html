@@ -100,6 +100,22 @@
   .here .meta{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:6px}
   .empty{padding:26px 18px;color:var(--dim);font-size:13px;line-height:1.5}
 
+  /* przewodnik krokowy w panelu (mobile-first) */
+  .guide{padding:14px}
+  .guide .gh{font-size:12.5px;color:var(--dim);line-height:1.5;margin:2px 4px 14px}
+  .guide .gh b{color:var(--txt)}
+  .gstep{display:grid;grid-template-columns:30px 1fr;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--ink2)}
+  .gstep .gnum{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;background:#2a2f3a;color:var(--dim)}
+  .gstep.active{border-color:var(--route)}
+  .gstep.active .gnum{background:var(--route);color:#04201e}
+  .gstep.done .gnum{background:var(--food);color:#04201e}
+  .gstep .gt{font-size:14px;font-weight:700}
+  .gstep .gd{font-size:12.5px;color:var(--dim);margin-top:3px;line-height:1.45}
+  .gstep .gd b{color:var(--txt)}
+  .gstep .gbtn{margin-top:11px;display:block;width:100%;background:var(--route);color:#04201e;border:none;border-radius:9px;padding:12px 16px;font-size:13px;font-weight:700;cursor:pointer}
+  .gstep.done .gbtn{background:#232732;color:var(--txt);border:1px solid var(--line)}
+  .hint{font-size:11px;color:var(--dim);line-height:1.4;width:100%;margin:-2px 0 2px}
+
   .warn{margin:0 12px 10px;padding:11px 13px;border-radius:10px;font-size:12.5px;line-height:1.45}
   .warn.food{background:#2a1416;color:#ffc9c9}
   .warn.fav{background:#2a2410;color:#ffe9a8}
@@ -281,8 +297,8 @@
   <label class="btn" for="file">Wczytaj trasę (.gpx)</label>
   <input id="file" type="file" accept=".gpx">
 
-  <div class="sec">Punkty</div>
-  <span class="grp">Promień od trasy
+  <div class="sec">Miejsca (noclegi · sklepy · jedzenie · paliwo)</div>
+  <span class="grp">Promień szukania
     <select id="radius">
       <option value="100">100 m</option>
       <option value="500" selected>500 m</option>
@@ -292,14 +308,17 @@
       <option value="5000">5 km</option>
     </select>
   </span>
-  <button id="fetch" class="go" disabled>Pobierz punkty</button>
-  <label class="btn" for="jsonfile">Wczytaj punkty</label>
+  <div class="hint">Noclegi szukane zawsze do 5 km w bok (warto nadłożyć). Sklepy, jedzenie i paliwo — wg promienia powyżej.</div>
+  <button id="fetch" class="go" disabled>Pobierz miejsca</button>
+  <div class="hint">Pobranie zapisuje się automatycznie offline.</div>
+  <label class="btn" for="jsonfile">Wczytaj miejsca (.json)</label>
   <input id="jsonfile" type="file" accept=".json">
-  <button id="export" disabled>Eksportuj punkty</button>
+  <button id="export" disabled>Eksportuj miejsca (.json)</button>
 
   <div class="sec">Zapisane offline</div>
   <span class="grp"><select id="saved" title="trasy zapisane na urządzeniu"></select></span>
-  <button id="del">Usuń bieżącą</button>
+  <button id="rename">✏ Zmień nazwę</button>
+  <button id="del">🗑 Usuń bieżącą</button>
 
   <div class="sec">Pomoc</div>
   <button id="helpBtn">Jak korzystać</button>
@@ -317,13 +336,14 @@
   <h2>Jak korzystać</h2>
   <p class="s">MiroBike pozwala Ci zaplanować postój czy nocleg podczas wyścigu, bez zbędnego analizowania mapy.</p>
   <ol>
-    <li><b>Trasa.</b> W ☰ → „Wczytaj trasę (.gpx)" wczytaj ślad wyścigu. Apka startuje z ostatnio zapisaną trasą, więc kolejny raz nic nie musisz robić.</li>
-    <li><b>Pobierz punkty.</b> Ustaw „od trasy" (jak daleko w bok szukać — 2 km to rozsądny start) i kliknij „Pobierz punkty". Pobranie zapisuje się <b>offline</b> — w terenie bez sieci dane będą dostępne.</li>
+    <li><b>Trasa.</b> Na liście (krok 1) lub w ☰ → „Wczytaj trasę (.gpx)" wczytaj ślad wyścigu. Apka startuje z ostatnio zapisaną trasą, więc kolejny raz nic nie musisz robić.</li>
+    <li><b>Pobierz miejsca.</b> Kliknij „Pobierz miejsca" (krok 2). Pobierzemy noclegi, sklepy, jedzenie i paliwo wzdłuż trasy. Noclegi szukamy zawsze do <b>5 km</b> w bok (warto nadłożyć po nocleg), resztę wg „Promień szukania" (domyślnie 500 m). Pobranie zapisuje się <b>automatycznie offline</b> — w terenie bez sieci dane będą dostępne.</li>
     <li><b>Filtry.</b> U góry włączaj/wyłączaj kategorie (spożywcze, noclegi, paliwo, jedzenie) oraz „★ ulubione". Lista i kropki na mapie reagują od razu.</li>
     <li><b>Pozycja.</b> Na rowerze włącz <b>„Śledź GPS"</b> — zobaczysz swoją pozycję i listę „przede mną" z odległością w kilometrach. Bez GPS możesz dotknąć mapy, by zasymulować pozycję.</li>
-    <li><b>Co przede mną.</b> Lista pokazuje punkty rosnąco wg kilometra: „+3,2 km" to ile zostało, obok metry od trasy i strona (L/P). „do 50/100/200 km" ustawia, jak daleko w przód patrzeć.</li>
-    <li><b>Szczegóły.</b> Dotknij punkt na liście lub mapie — zobaczysz godziny otwarcia, telefon i adres (o ile są w danych). Gwiazdką dodajesz do <b>ulubionych</b>.</li>
-    <li><b>Ostrzeżenia.</b> Czerwone = wjeżdżasz w długi odcinek bez sklepu (zatankuj zapasy). Żółte = ulubiony punkt (np. nocleg) przed Tobą — „zostało Ci X km".</li>
+    <li><b>Co przede mną.</b> Lista pokazuje miejsca rosnąco wg kilometra: „+3,2 km" to ile zostało, obok metry od trasy i strona (L/P). „do 50/100/200 km" ustawia, jak daleko w przód patrzeć.</li>
+    <li><b>Szczegóły.</b> Dotknij miejsce na liście lub mapie — zobaczysz godziny otwarcia, telefon i adres (o ile są w danych). Gwiazdką dodajesz do <b>ulubionych</b>.</li>
+    <li><b>Zapisane offline.</b> W ☰ → „Zapisane offline" przełączasz między pobranymi trasami, możesz „✏ Zmień nazwę" albo „🗑 Usuń bieżącą".</li>
+    <li><b>Ostrzeżenia.</b> Czerwone = wjeżdżasz w długi odcinek bez sklepu (zatankuj zapasy). Żółte = ulubione miejsce (np. nocleg) przed Tobą — „zostało Ci X km".</li>
     <li><b>Mapa.</b> Przyciskiem „Mapa" pokazujesz ją na pełny ekran, „✕ zamknij mapę" chowasz. Offline działa lista i pozycja; kafelki podkładu mapy wymagają sieci.</li>
     <li><b>Instalacja.</b> W Safari: Udostępnij → „Dodaj do ekranu początkowego". Apka odpali się jak natywna i będzie działać offline.</li>
   </ol>
@@ -435,10 +455,12 @@ function loadRoute(r,name){
   route=r; routeDS=downsample(r,150); lastKm=null; selPid=null;
   document.getElementById('trackname').textContent=name+" · "+(r.totalM/1000).toFixed(1)+" km"+(r.isLoop?" · pętla":"");
   drawRoute();
-  pois=[];pidIndex.clear();foodGaps=[];renderPOIs();document.getElementById('panel').innerHTML='';
+  pois=[];pidIndex.clear();foodGaps=[];renderPOIs();
   loadFavs(name);
   document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
-  setStatus("Trasa wczytana. Ustaw „Promień od trasy” w ☰ i kliknij „Pobierz punkty”.");
+  document.getElementById('export').disabled=true;
+  renderGuide();
+  setStatus("Trasa wczytana ✓ — teraz kliknij „Pobierz miejsca” (krok 2).");
   persistBundle();
 }
 function drawRoute(){
@@ -465,8 +487,9 @@ function loadBundle(b, skipPersist){
     tags: p.tags || {opening_hours:p.opening_hours||"","addr:city":p.city||"",phone:p.phone||"",website:p.website||""}}));
   indexPois(); computeGaps(); loadFavs(nm); renderPOIs();
   document.getElementById('fetch').disabled=false; document.getElementById('gps').disabled=false;
-  document.getElementById('export').disabled=false;
-  setStatus(pois.length+" punktów. Dotknij mapy lub włącz „Śledź GPS”.");
+  document.getElementById('export').disabled=pois.length===0;
+  if(lastKm==null) renderGuide();
+  setStatus(pois.length+" miejsc. Dotknij mapy lub włącz „Śledź GPS”.");
   if(!skipPersist) persistBundle(b);
 }
 function indexPois(){pidIndex.clear();for(const p of pois) pidIndex.set(pid(p),p);}
@@ -478,22 +501,23 @@ async function fetchPOIs(){
   if(!route) return;
   if(!active.size){setStatus("Włącz przynajmniej jedną kategorię.");return;}
   const btn=document.getElementById('fetch'); btn.disabled=true; closeMenu();
-  const r=R(); const filters=[];
-  if(active.has("food"))  filters.push('nw["shop"~"^(supermarket|convenience|grocery|greengrocer|bakery|general|deli|butcher|farm)$"]');
-  if(active.has("sleep")) filters.push('nw["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]');
-  if(active.has("fuel"))  filters.push('nw["amenity"~"^(fuel)$"]');
-  if(active.has("eat"))   filters.push('nw["amenity"~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream)$"]');
-  const key=r+"|"+[...active].sort().join(",");
+  const rOther=R(), rSleep=Math.max(R(),5000); const filters=[];
+  // noclegi: zawsze do 5 km (warto nadłożyć); pozostałe wg promienia (domyślnie 500 m)
+  if(active.has("food"))  filters.push({q:'nw["shop"~"^(supermarket|convenience|grocery|greengrocer|bakery|general|deli|butcher|farm)$"]',r:rOther});
+  if(active.has("sleep")) filters.push({q:'nw["tourism"~"^(hotel|guest_house|hostel|motel|apartment|chalet|camp_site|caravan_site|alpine_hut|wilderness_hut)$"]',r:rSleep});
+  if(active.has("fuel"))  filters.push({q:'nw["amenity"~"^(fuel)$"]',r:rOther});
+  if(active.has("eat"))   filters.push({q:'nw["amenity"~"^(restaurant|cafe|fast_food|bar|pub|food_court|ice_cream)$"]',r:rOther});
+  const key=rOther+"|"+[...active].sort().join(",");
   if(!fetchState||fetchState.key!==key){
     const q=downsample(route,1500);const c=[];for(let i=0;i<q.lat.length;i++)c.push(q.lat[i]+","+q.lon[i]);
     const batches=[];for(let i=0;i<c.length;i+=25)batches.push(c.slice(i,i+25));
-    fetchState={batches,done:new Set(),seen:new Map(),r,key,filters};
+    fetchState={batches,done:new Set(),seen:new Map(),key,filters};
   }
   const S=fetchState; progShow(); progSet(S.done.size,S.batches.length);
   for(const i of S.batches.map((_,i)=>i).filter(i=>!S.done.has(i))){
-    setStatus(`Pobieram… ${S.done.size+1}/${S.batches.length} · ${S.seen.size} POI`);
+    setStatus(`Pobieram… ${S.done.size+1}/${S.batches.length} · ${S.seen.size} miejsc`);
     const chain=S.batches[i].join(",");
-    const body=S.filters.map(f=>`  ${f}(around:${S.r},${chain});`).join("\n");
+    const body=S.filters.map(f=>`  ${f.q}(around:${f.r},${chain});`).join("\n");
     const q=`[out:json][timeout:90];\n(\n${body}\n);\nout center tags;`;
     try{
       const data=await overpass(q);
@@ -511,8 +535,8 @@ async function fetchPOIs(){
   }
   progHide(); finalize(S.seen); btn.disabled=false;
   const left=S.batches.length-S.done.size;
-  if(left>0){btn.textContent="Dobierz resztę ("+left+")";setStatus(`Mam ${pois.length} POI. ${left} paczek padło — kliknij „Dobierz resztę".`);}
-  else{btn.textContent="Pobierz punkty";setStatus(pois.length+" POI gotowych i zapisanych offline. Dotknij mapy lub włącz GPS.");}
+  if(left>0){btn.textContent="Dobierz resztę ("+left+")";setStatus(`Mam ${pois.length} miejsc. ${left} paczek padło — kliknij „Dobierz resztę".`);}
+  else{btn.textContent="Pobierz miejsca";setStatus(pois.length+" miejsc gotowych i zapisanych offline. Dotknij mapy lub włącz GPS.");}
 }
 function finalize(seen){
   pois=[];
@@ -520,7 +544,7 @@ function finalize(seen){
   pois.sort((a,b)=>a.km-b.km); indexPois(); computeGaps(); renderPOIs();
   document.getElementById('export').disabled=pois.length===0;
   if(pois.length) persistBundle();
-  if(lastKm!=null) renderPanel();
+  if(lastKm!=null) renderPanel(); else renderGuide();
 }
 function rawDots(seen){poiLayer.clearLayers();for(const p of seen.values()){const c=CATS[p.cats[0]].color;L.circleMarker([p.lat,p.lon],{radius:3,color:c,weight:1,fillColor:c,fillOpacity:.8}).addTo(poiLayer);}}
 async function overpass(q,attempts=4){
@@ -644,6 +668,34 @@ function setHere(lat,lon,fromGPS){
 }
 function aheadDelta(km,cur){let d=km-cur;if(d<-0.05&&route.isLoop)d+=route.totalM/1000;return d;}
 
+// ---- przewodnik krokowy (widoczny dopóki nie ma pozycji) ----
+function renderGuide(){
+  const panel=document.getElementById('panel'); if(!panel) return;
+  const hasRoute=!!route, nPlaces=pois.length;
+  const name=hasRoute?document.getElementById('trackname').textContent:"";
+  const rLab=R()>=1000?(R()/1000+" km"):(R()+" m");
+  const counts={}; for(const p of pois){const c=p.cats[0];counts[c]=(counts[c]||0)+1;}
+  const brk=ORDER.filter(c=>counts[c]).map(c=>CATS[c].label.toLowerCase()+" "+counts[c]).join(" · ");
+  const ready=hasRoute&&nPlaces;
+  let h=`<div class="guide"><div class="gh">Zaplanuj postoje i noclegi na trasie ultra — w 3 krokach. Wszystko zapisuje się <b>offline</b>, więc w terenie zadziała bez zasięgu.</div>`;
+  h+=`<div class="gstep ${hasRoute?'done':'active'}"><div class="gnum">${hasRoute?'✓':'1'}</div><div>
+    <div class="gt">Trasa wyścigu</div>
+    <div class="gd">${hasRoute?esc(name):'Wczytaj ślad GPX swojego wyścigu.'}</div>
+    <button class="gbtn" onclick="document.getElementById('file').click()">${hasRoute?'Zmień trasę (.gpx)':'Wczytaj trasę (.gpx)'}</button>
+  </div></div>`;
+  h+=`<div class="gstep ${!hasRoute?'':(nPlaces?'done':'active')}"><div class="gnum">${nPlaces?'✓':'2'}</div><div>
+    <div class="gt">Miejsca na trasie</div>
+    <div class="gd">${nPlaces?(nPlaces+' miejsc · '+brk):('Pobierz noclegi, sklepy, jedzenie i paliwo wzdłuż trasy. Noclegi do <b>5 km</b> w bok, reszta do <b>'+rLab+'</b>. Zapis offline automatyczny.')}</div>
+    ${hasRoute?`<button class="gbtn" onclick="fetchPOIs()">${nPlaces?'Pobierz ponownie':'Pobierz miejsca'}</button>`:''}
+  </div></div>`;
+  h+=`<div class="gstep ${ready?'active':''}"><div class="gnum">3</div><div>
+    <div class="gt">Twoja pozycja</div>
+    <div class="gd">Włącz <b>Śledź GPS</b> na rowerze — pokażę, co masz przed sobą i za ile km. Bez GPS dotknij mapy, by zasymulować pozycję.</div>
+    ${ready?`<button class="gbtn" onclick="document.getElementById('gps').click()">Śledź GPS</button>`:''}
+  </div></div></div>`;
+  panel.innerHTML=h;
+}
+
 function renderPanel(){
   const cur=lastKm, total=route.totalM/1000, rg=rangeM()/1000;
   const panel=document.getElementById('panel');
@@ -673,7 +725,7 @@ function renderPanel(){
     ${warn?`<div style="height:10px"></div>`+warn:""}
     <div class="listhdr"><span>przed Tobą (do ${rg.toFixed(0)} km)</span><span>${up.length}</span></div>`;
 
-  if(!pois.length) html+=`<div class="empty" style="padding:18px">Brak punktów. Otwórz ☰ → „Pobierz punkty".</div>`;
+  if(!pois.length) html+=`<div class="empty" style="padding:18px">Brak miejsc. Otwórz ☰ → „Pobierz miejsca".</div>`;
   else if(!up.length) html+=`<div class="empty" style="padding:18px">Nic w zasięgu ${rg.toFixed(0)} km dla wybranych filtrów. Zwiększ zasięg lub „od trasy".</div>`;
   else html+=`<ul class="roadbook">`+up.slice(0,120).map(({p,delta})=>{
       const id=pid(p),c=CATS[p.cats[0]],isFav=favorites.has(id);
@@ -766,7 +818,7 @@ function refreshSaved(){
     let np=0,nf=0;
     try{const b=JSON.parse(localStorage.getItem("mb_bundle:"+n)||"{}");np=(b.pois||[]).length;}catch(e){}
     try{const f=JSON.parse(localStorage.getItem("mb_fav:"+n)||"[]");nf=f.length;}catch(e){}
-    const lab=n+" — "+np+" pkt"+(nf?" · ★"+nf:"");
+    const lab=n+" — "+np+" miejsc"+(nf?" · ★"+nf:"");
     return `<option ${n===cur?'selected':''} value="${esc(n)}">${esc(lab)}</option>`;
   }).join(""):`<option value="">— brak —</option>`;
 }
@@ -786,7 +838,31 @@ document.getElementById('del').addEventListener('click',()=>{
     localStorage.removeItem("mb_fav:"+cur);
     if((localStorage.getItem("mb_last")||"")===cur) localStorage.removeItem("mb_last");
   }catch(e){}
-  refreshSaved(); setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
+  refreshSaved(); if(lastKm==null) renderGuide();
+  setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
+});
+document.getElementById('rename').addEventListener('click',()=>{
+  const sel=document.getElementById('saved');
+  let cur=sel?sel.value:"";
+  if(!cur){ try{cur=localStorage.getItem("mb_last")||"";}catch(e){} }
+  if(!cur){ setStatus("Brak zapisanej trasy do zmiany nazwy."); return; }
+  let nn=null; try{ nn=prompt("Nowa nazwa zapisanej mapy:",cur); }catch(e){}
+  if(nn==null) return; nn=nn.trim();
+  if(!nn||nn===cur) return;
+  try{
+    if(localStorage.getItem("mb_bundle:"+nn)){ setStatus("Nazwa „"+nn+"” już istnieje — wybierz inną."); return; }
+    const raw=localStorage.getItem("mb_bundle:"+cur);
+    if(!raw){ setStatus("Nie znaleziono danych do zmiany nazwy."); return; }
+    const obj=JSON.parse(raw); obj.name=nn;
+    localStorage.setItem("mb_bundle:"+nn, JSON.stringify(obj));
+    const f=localStorage.getItem("mb_fav:"+cur); if(f) localStorage.setItem("mb_fav:"+nn,f);
+    localStorage.removeItem("mb_bundle:"+cur); localStorage.removeItem("mb_fav:"+cur);
+    if((localStorage.getItem("mb_last")||"")===cur) localStorage.setItem("mb_last",nn);
+    const tn=document.getElementById('trackname'); const parts=tn.textContent.split(" · ");
+    if(parts[0]===cur){ parts[0]=nn; tn.textContent=parts.join(" · "); }
+  }catch(e){ setStatus("Zmiana nazwy nieudana: "+e.message); return; }
+  refreshSaved(); if(lastKm==null) renderGuide();
+  setStatus("Zmieniono nazwę na „"+nn+"”.");
 });
 
 // ---- przełączniki ----
@@ -872,8 +948,9 @@ setMapOpen(!window.matchMedia("(max-width:820px)").matches);
   let lastName=null, raw=null;
   try{ lastName=localStorage.getItem("mb_last"); if(lastName) raw=localStorage.getItem("mb_bundle:"+lastName); }catch(e){}
   if(raw){ try{ loadBundle(JSON.parse(raw),true); setStatus("Zapisana trasa offline: "+lastName); }catch(e){ if(window.BUNDLE) loadBundle(window.BUNDLE); } }
-  else if(window.BUNDLE){ try{ loadBundle(window.BUNDLE); }catch(e){ setStatus("Błąd punktów: "+e.message); } }
-  else setStatus("Otwórz ☰ → Wczytaj trasę GPX albo punkty.");
+  else if(window.BUNDLE){ try{ loadBundle(window.BUNDLE); }catch(e){ setStatus("Błąd miejsc: "+e.message); } }
+  else setStatus("Zacznij od kroku 1 — wczytaj trasę (.gpx).");
+  if(lastKm==null) renderGuide();
   refreshSaved();
 })();
 
