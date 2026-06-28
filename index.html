@@ -68,6 +68,11 @@
   body:not(.map-open) #map{display:none}
   #map{height:100%;background:#0c0d10;position:relative}
   .leaflet-container{background:#0c0d10}
+  .kmmark span{display:inline-block;transform:translate(-50%,-50%);background:#14161bd9;border:1px solid var(--route);color:var(--route);
+    font-family:var(--mono);font-size:10px;font-weight:700;line-height:1;padding:2px 5px;border-radius:6px;white-space:nowrap;cursor:pointer}
+  .heretip{background:var(--here);color:#3a2e00;border:none;font-family:var(--mono);font-size:11px;font-weight:700;
+    padding:2px 6px;border-radius:6px;box-shadow:0 1px 4px #0007}
+  .heretip:before{border-top-color:var(--here)}
   #mapClose{display:none;position:absolute;top:calc(10px + var(--sat));right:10px;z-index:1200;background:#1c1f27ee;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px 12px;font-size:14px;cursor:pointer}
 
   /* setup controls — desktop: pasek; mobile: szuflada */
@@ -344,6 +349,7 @@
     <li><b>Szczegóły.</b> Dotknij miejsce na liście lub mapie — zobaczysz godziny otwarcia, telefon i adres (o ile są w danych). Gwiazdką dodajesz do <b>ulubionych</b>.</li>
     <li><b>Zapisane offline.</b> W ☰ → „Zapisane offline" przełączasz między pobranymi trasami, możesz „✏ Zmień nazwę" albo „🗑 Usuń bieżącą".</li>
     <li><b>Ostrzeżenia.</b> Czerwone = wjeżdżasz w długi odcinek bez sklepu (zatankuj zapasy). Żółte = ulubione miejsce (np. nocleg) przed Tobą — „zostało Ci X km".</li>
+    <li><b>Kilometry i czas.</b> Na trasie widać znaczniki kilometrów — <b>dotknij dowolny</b>, by „przenieść się" w to miejsce i zobaczyć, co masz dalej (wygodne do planowania noclegu). Wszędzie pokazujemy <b>szacowany czas</b> (⏱) przy średniej 20 km/h z doliczeniem podjazdów.</li>
     <li><b>Mapa.</b> Przyciskiem „Mapa" pokazujesz ją na pełny ekran, „✕ zamknij mapę" chowasz. Offline działa lista i pozycja; kafelki podkładu mapy wymagają sieci.</li>
     <li><b>Instalacja.</b> W Safari: Udostępnij → „Dodaj do ekranu początkowego". Apka odpali się jak natywna i będzie działać offline.</li>
   </ol>
@@ -374,6 +380,9 @@ const OVERPASS=[
   "https://overpass.private.coffee/api/interpreter",
 ];
 const FAV_THRESHOLDS=[50,20,10,5,2];
+// model czasu jazdy: prędkość bazowa (płasko) + kara za przewyższenie
+const RIDE_KMH=20;            // km/h na płaskim
+const CLIMB_PENALTY_M=600;    // metrów podjazdu dających +1h (model typu Naismith)
 
 // ——— KONFIGURACJA (uzupełnij swoje) ———
 // Link do zbiórki: buycoffee.to/twoj-profil (PL) albo buymeacoffee.com/twoj-profil
@@ -387,8 +396,8 @@ function rangeM(){return parseInt(document.getElementById('range').value,10)*100
 const active=new Set(["food","sleep","fuel","eat"]);
 let favOnly=false;
 
-let map, routeLine, hereMarker, hereAcc, poiLayer;
-let route=null, routeDS=null;
+let map, routeLine, hereMarker, hereAcc, poiLayer, kmLayer;
+let route=null, routeDS=null, routeTime=null, routeAscent=0;
 let pois=[], pidIndex=new Map(), foodGaps=[];
 let favorites=new Set(), favAlerted=new Map();
 let lastKm=null, lastOff=0, selPid=null;
@@ -409,21 +418,28 @@ function initMap(){
 }
 
 function parseGPX(text){
-  const re=/lat="([-\d.]+)"\s+lon="([-\d.]+)"/g; let m,pts=[];
-  while((m=re.exec(text))) pts.push({lat:+m[1],lon:+m[2]});
+  const re=/lat="([-\d.]+)"\s+lon="([-\d.]+)"/g; let m,pts=[],ends=[];
+  while((m=re.exec(text))){ pts.push({lat:+m[1],lon:+m[2]}); ends.push(re.lastIndex); }
   if(pts.length<2) throw new Error("Za mało punktów w GPX.");
+  // wysokość: <ele> należy do punktu, jeśli pojawia się przed następnym lat="
+  const ele=/<ele>\s*([-\d.]+)\s*<\/ele>/g;
+  for(let i=0;i<pts.length;i++){
+    ele.lastIndex=ends[i]; const em=ele.exec(text);
+    const limit=(i+1<ends.length)?ends[i+1]:text.length;
+    if(em && em.index<limit) pts[i].ele=+em[1];
+  }
   const cum=[0];
   for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon));
   return {pts,cum,totalM:cum[cum.length-1],isLoop:hav(pts[0].lat,pts[0].lon,pts.at(-1).lat,pts.at(-1).lon)<200};
 }
 function downsample(r,stepM){
-  const lat=[r.pts[0].lat],lon=[r.pts[0].lon],cum=[0];let acc=0;
+  const lat=[r.pts[0].lat],lon=[r.pts[0].lon],cum=[0],ele=[r.pts[0].ele];let acc=0;
   for(let i=1;i<r.pts.length;i++){
     acc+=hav(r.pts[i-1].lat,r.pts[i-1].lon,r.pts[i].lat,r.pts[i].lon);
-    if(acc>=stepM){lat.push(r.pts[i].lat);lon.push(r.pts[i].lon);cum.push(r.cum[i]);acc=0;}
+    if(acc>=stepM){lat.push(r.pts[i].lat);lon.push(r.pts[i].lon);cum.push(r.cum[i]);ele.push(r.pts[i].ele);acc=0;}
   }
-  lat.push(r.pts.at(-1).lat);lon.push(r.pts.at(-1).lon);cum.push(r.totalM);
-  return {lat,lon,cum};
+  lat.push(r.pts.at(-1).lat);lon.push(r.pts.at(-1).lon);cum.push(r.totalM);ele.push(r.pts.at(-1).ele);
+  return {lat,lon,cum,ele};
 }
 function project(plat,plon,winKm){
   const d=routeDS; let best=Infinity,bk=0,bside="";
@@ -443,6 +459,57 @@ function project(plat,plon,winKm){
   if(winKm!=null && (best===Infinity || best>3000)) return project(plat,plon,null);
   return {km:bk/1000, detourM:Math.round(best), side:bside};
 }
+
+// ---- profil czasu (ETA) ----
+function buildTimeProfile(ds){
+  const t=[0], vMs=RIDE_KMH*1000/3600, penSecPerM=3600/CLIMB_PENALTY_M;
+  let asc=0;
+  for(let i=1;i<ds.lat.length;i++){
+    const seg=Math.max(0,ds.cum[i]-ds.cum[i-1]);
+    let up=0;
+    if(ds.ele && ds.ele[i]!=null && ds.ele[i-1]!=null) up=Math.max(0,ds.ele[i]-ds.ele[i-1]);
+    asc+=up;
+    t.push(t[i-1] + seg/vMs + up*penSecPerM);
+  }
+  routeAscent=asc;
+  // jeśli brak danych o wysokości – profil i tak działa (płaski, sam dystans)
+  return t;
+}
+function timeAtKm(km){
+  if(!routeTime||!routeDS) return null;
+  const m=km*1000, c=routeDS.cum;
+  if(m<=c[0]) return routeTime[0];
+  for(let i=1;i<c.length;i++){ if(m<=c[i]){ const f=(m-c[i-1])/((c[i]-c[i-1])||1); return routeTime[i-1]+f*(routeTime[i]-routeTime[i-1]); } }
+  return routeTime[routeTime.length-1];
+}
+function etaAheadDelta(delta,cur){
+  if(routeTime==null||delta==null||delta<=0) return null;
+  const total=route.totalM/1000;
+  let tk=cur+delta, tEnd=timeAtKm(total);
+  if(tk>total){ tk-=total; return (tEnd-timeAtKm(cur))+timeAtKm(tk); }
+  return timeAtKm(tk)-timeAtKm(cur);
+}
+function fmtDur(sec){
+  if(sec==null||!isFinite(sec)) return "";
+  sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600), m=Math.round((sec%3600)/60);
+  if(h&&m) return h+" h "+m+" min"; if(h) return h+" h"; return m+" min";
+}
+
+// ---- znaczniki kilometrów na trasie ----
+function kmStep(total){ return total<=60?5 : total<=150?10 : total<=400?20 : 25; }
+function drawKmMarkers(){
+  if(kmLayer) kmLayer.clearLayers(); else kmLayer=L.layerGroup().addTo(map);
+  if(!routeDS) return;
+  const total=route.totalM/1000, step=kmStep(total), c=routeDS.cum, lat=routeDS.lat, lon=routeDS.lon;
+  for(let km=step; km<total-0.5; km+=step){
+    const m=km*1000; let i=1; while(i<c.length && c[i]<m) i++;
+    const f=(m-c[i-1])/((c[i]-c[i-1])||1);
+    const la=lat[i-1]+f*(lat[i]-lat[i-1]), lo=lon[i-1]+f*(lon[i]-lon[i-1]);
+    const mk=L.marker([la,lo],{icon:L.divIcon({className:'kmmark',html:'<span>'+km+'</span>',iconSize:[0,0]}),keyboard:false}).addTo(kmLayer);
+    mk.on('click',()=>setHere(la,lo,false));
+  }
+}
+function refreshRouteDerived(){ routeTime=buildTimeProfile(routeDS); drawKmMarkers(); }
 
 // ---- ładowanie trasy ----
 document.getElementById('file').addEventListener('change',ev=>{
@@ -466,6 +533,7 @@ function loadRoute(r,name){
 function drawRoute(){
   if(routeLine) routeLine.remove();
   routeLine=L.polyline(route.pts.map(p=>[p.lat,p.lon]),{color:css('--route'),weight:3,opacity:.95}).addTo(map);
+  refreshRouteDerived();
   if(document.body.classList.contains('map-open')) fitRoute();
 }
 function fitRoute(){ if(routeLine) map.fitBounds(routeLine.getBounds(),{padding:[26,26]}); }
@@ -478,7 +546,7 @@ document.getElementById('jsonfile').addEventListener('change',ev=>{
   rd.readAsText(f);
 });
 function loadBundle(b, skipPersist){
-  route={pts:b.route.map(a=>({lat:a[0],lon:a[1]})),cum:b.route.map(a=>a[2]*1000),totalM:b.total_km*1000,isLoop:b.is_loop};
+  route={pts:b.route.map(a=>({lat:a[0],lon:a[1],ele:a[3]})),cum:b.route.map(a=>a[2]*1000),totalM:b.total_km*1000,isLoop:b.is_loop};
   routeDS=downsample(route,150); lastKm=null; selPid=null;
   drawRoute();
   const nm=b.name||"trasa";
@@ -635,6 +703,7 @@ function detailHtml(p){
   const nav=`https://www.google.com/maps/dir/?api=1&destination=${p.lat}%2C${p.lon}`;
   const booking=bookingUrl(p.name,t["addr:city"]);
   let info=`<div class="dr">km ${p.km.toFixed(1)} · ${p.detourM} m od trasy ${p.side||""}</div>`;
+  if(lastKm!=null){ const eta=etaAheadDelta(aheadDelta(p.km,lastKm),lastKm); if(eta!=null) info+=`<div class="dr">⏱ ≈ ${fmtDur(eta)} stąd</div>`; }
   if(t.stars) info+=`<div class="dr">⭐ ${esc(t.stars)}</div>`;
   if(t.opening_hours) info+=`<div class="dr">🕒 ${esc(t.opening_hours)}</div>`;
   if(t.cuisine) info+=`<div class="dr">🍽 ${esc(t.cuisine.replace(/;/g,", "))}</div>`;
@@ -664,6 +733,7 @@ function setHere(lat,lon,fromGPS){
   lastKm=pr.km; lastOff=pr.detourM;
   if(hereMarker) hereMarker.remove();
   hereMarker=L.circleMarker([lat,lon],{radius:8,color:css('--here'),weight:3,fillColor:css('--here'),fillOpacity:.55}).addTo(map);
+  hereMarker.bindTooltip("km "+pr.km.toFixed(1),{permanent:true,direction:'top',className:'heretip',offset:[0,-6]}).openTooltip();
   renderPanel(); if(fromGPS) checkFavAlerts();
 }
 function aheadDelta(km,cur){let d=km-cur;if(d<-0.05&&route.isLoop)d+=route.totalM/1000;return d;}
@@ -678,9 +748,11 @@ function renderGuide(){
   const brk=ORDER.filter(c=>counts[c]).map(c=>CATS[c].label.toLowerCase()+" "+counts[c]).join(" · ");
   const ready=hasRoute&&nPlaces;
   let h=`<div class="guide"><div class="gh">Zaplanuj postoje i noclegi na trasie ultra — w 3 krokach. Wszystko zapisuje się <b>offline</b>, więc w terenie zadziała bez zasięgu.</div>`;
+  let routeExtra="";
+  if(hasRoute&&routeTime){ const tt=timeAtKm(route.totalM/1000); routeExtra=`<br>⏱ ≈ ${fmtDur(tt)} jazdy (śr. ${RIDE_KMH} km/h)`+(routeAscent>5?` · ↑ ${Math.round(routeAscent)} m`:""); }
   h+=`<div class="gstep ${hasRoute?'done':'active'}"><div class="gnum">${hasRoute?'✓':'1'}</div><div>
     <div class="gt">Trasa wyścigu</div>
-    <div class="gd">${hasRoute?esc(name):'Wczytaj ślad GPX swojego wyścigu.'}</div>
+    <div class="gd">${hasRoute?esc(name)+routeExtra:'Wczytaj ślad GPX swojego wyścigu.'}</div>
     <button class="gbtn" onclick="document.getElementById('file').click()">${hasRoute?'Zmień trasę (.gpx)':'Wczytaj trasę (.gpx)'}</button>
   </div></div>`;
   h+=`<div class="gstep ${!hasRoute?'':(nPlaces?'done':'active')}"><div class="gnum">${nPlaces?'✓':'2'}</div><div>
@@ -716,9 +788,11 @@ function renderPanel(){
   const favAhead=pois.filter(p=>favorites.has(pid(p))).map(p=>({p,delta:aheadDelta(p.km,cur)})).filter(x=>x.delta>0.02).sort((a,b)=>a.delta-b.delta)[0];
   if(favAhead) warn+=`<div class="warn fav">★ Do ulubionego: <b>${esc(favAhead.p.name)}</b> za <b>${favAhead.delta.toFixed(1)} km</b> (${CATS[favAhead.p.cats[0]].label.toLowerCase()}).</div>`;
 
+  const tEnd=routeTime?(timeAtKm(total)-timeAtKm(cur)):null;
+  const endEta=tEnd!=null?` · ⏱ ≈ ${fmtDur(tEnd)}`:"";
   let html=`<div class="here"><div class="lab">jesteś na</div>
     <div class="km">${cur.toFixed(1)}<small> / ${total.toFixed(0)} km</small></div>
-    <div class="meta">${(total-cur).toFixed(1)} km do końca${offNote}</div></div>
+    <div class="meta">${(total-cur).toFixed(1)} km do końca${endEta}${offNote}</div></div>
     <div class="nextrow">${ORDER.filter(c=>active.has(c)).map(c=>{const n=nextOf[c];
       return `<div class="cell"><div class="cl" style="color:${CATS[c].color}">${CATS[c].label}</div>
         <div class="cv">${n?("+"+n.delta.toFixed(1)):"—"}</div><div class="cn">${n?esc(n.p.name):"brak"}</div></div>`;}).join("")}</div>
@@ -730,11 +804,12 @@ function renderPanel(){
   else html+=`<ul class="roadbook">`+up.slice(0,120).map(({p,delta})=>{
       const id=pid(p),c=CATS[p.cats[0]],isFav=favorites.has(id);
       const oh=p.tags?.opening_hours?`<span class="oh">${esc(p.tags.opening_hours)}</span> · `:"";
+      const eta=etaAheadDelta(delta,cur); const etaTxt=eta!=null?`⏱ ${fmtDur(eta)} · `:"";
       return `<li data-id="${id}" id="li_${id}" class="${id===selPid?'sel':''}" onclick="selectFromList('${id}')">
         <div class="d">+${delta.toFixed(1)}<small>km ${p.km.toFixed(1)}</small></div>
         <div class="tick" style="background:${c.color}"></div>
         <div class="info"><div class="nm">${esc(p.name)}</div>
-          <div class="det">${oh}${p.detourM} m ${p.side||""}${p.tags?.["addr:city"]?" · "+esc(p.tags["addr:city"]):""}</div></div>
+          <div class="det">${etaTxt}${oh}${p.detourM} m ${p.side||""}${p.tags?.["addr:city"]?" · "+esc(p.tags["addr:city"]):""}</div></div>
         <div class="star ${isFav?'is':''}" onclick="event.stopPropagation();toggleFav('${id}')">${isFav?'★':'☆'}</div>
       </li>`;}).join("")+`</ul>`;
   panel.innerHTML=html;
@@ -790,7 +865,7 @@ function buildBundle(){
   return {
     name:document.getElementById('trackname').textContent.split(" · ")[0],
     total_km:+(route.totalM/1000).toFixed(3), is_loop:route.isLoop,
-    route:ds.lat.map((la,i)=>[+la.toFixed(6),+ds.lon[i].toFixed(6),+(ds.cum[i]/1000).toFixed(3)]),
+    route:ds.lat.map((la,i)=>{const e=[+la.toFixed(6),+ds.lon[i].toFixed(6),+(ds.cum[i]/1000).toFixed(3)];if(ds.ele&&ds.ele[i]!=null)e.push(+ds.ele[i].toFixed(1));return e;}),
     pois:pois.map(p=>({name:p.name,cats:p.cats,lat:+p.lat.toFixed(6),lon:+p.lon.toFixed(6),
       route_km:+p.km.toFixed(3),detour_m:p.detourM,side:p.side, tags:tagSubset(p.tags)})),
     food_gaps:foodGaps.map(g=>({from_km:+g.fromKm.toFixed(2),to_km:+g.toKm.toFixed(2),gap_km:+g.gapKm.toFixed(2)})),
@@ -885,13 +960,16 @@ function planHtml(){
   const rows=favs.map((p,i)=>{
     const seg = i===0 ? p.km : (p.km - favs[i-1].km);
     const c=CATS[p.cats[0]];
+    const segT = routeTime ? (i===0 ? timeAtKm(p.km) : (timeAtKm(p.km)-timeAtKm(favs[i-1].km))) : null;
+    const segEta = segT!=null?` · ⏱ ${fmtDur(segT)}`:"";
     const fromYou=(lastKm!=null)?aheadDelta(p.km,lastKm):null;
-    const youLine=(fromYou!=null)?(fromYou>0?`<small>${fromYou.toFixed(1)} km od Ciebie</small>`:`<small>za Tobą</small>`):"";
+    const youEta=(fromYou!=null&&fromYou>0)?etaAheadDelta(fromYou,lastKm):null;
+    const youLine=(fromYou!=null)?(fromYou>0?`<small>${fromYou.toFixed(1)} km${youEta!=null?" · "+fmtDur(youEta):""} od Ciebie</small>`:`<small>za Tobą</small>`):"";
     return `<li onclick="openFromPlan('${pid(p)}')">
       <div class="no">${i+1}</div>
       <div class="tick" style="background:${c.color}"></div>
       <div><div class="nm">${esc(p.name)}</div><div class="sub">km ${p.km.toFixed(1)} · ${p.detourM} m ${p.side||""} · ${c.label.toLowerCase()}</div></div>
-      <div class="seg">+${seg.toFixed(1)}<small>${i===0?"od startu":"od poprz."}</small>${youLine}</div>
+      <div class="seg">+${seg.toFixed(1)}<small>${i===0?"od startu":"od poprz."}${segEta}</small>${youLine}</div>
     </li>`;
   }).join("");
   const span=(favs.at(-1).km-favs[0].km).toFixed(0);
