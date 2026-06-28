@@ -48,6 +48,17 @@ export function nextShop(pois: Poi[], hereKm: number, isLoop: boolean, totalKm: 
   return nextOfCat(pois, "food", hereKm, isLoop, totalKm);
 }
 
+/** Luki wzdłuż trasy dla danej kategorii (np. woda) — odcinki ≥ minKm bez punktu. */
+export function gapsByCat(pois: Poi[], cat: string, minKm: number): FoodGap[] {
+  const arr = pois.filter((p) => p.cats.includes(cat as Poi["cats"][number])).sort((a, b) => a.km - b.km);
+  const gaps: FoodGap[] = [];
+  for (let i = 0; i < arr.length - 1; i++) {
+    const g = arr[i + 1].km - arr[i].km;
+    if (g >= minKm) gaps.push({ fromKm: arr[i].km, toKm: arr[i + 1].km, gapKm: g });
+  }
+  return gaps;
+}
+
 export interface GapWarning {
   kmTo: number;
   gapKm: number;

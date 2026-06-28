@@ -6,7 +6,7 @@ import { downsample, project, pid, aheadDelta } from "./lib/geo";
 import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS, ORDER } from "./lib/categories";
-import { aheadList, nextShop, nextOfCat, gapBeforeStretch, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
+import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
 import { MODES, planTrip, candidates, fmtClock } from "./lib/trip";
 import type { TripState, TripConfig, ModeKey } from "./lib/types";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
@@ -50,6 +50,40 @@ function defaultCfg(): TripConfig {
   const m = MODES[1];
   const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0);
   return { mode: m.key, speedKmh: m.speedKmh, dailyKm: m.dailyKm, sleepHours: m.sleepHours, lunchHour: 13, startISO: toLocalInput(d) };
+}
+
+function ElevationProfile({ ds, totalKm, cur }: { ds: DownRoute; totalKm: number; cur: number | null }) {
+  const W = 100, H = 36;
+  let min = Infinity, max = -Infinity, ascent = 0, prev: number | null = null;
+  for (let i = 0; i < ds.lat.length; i++) {
+    const e = ds.ele[i];
+    if (e == null) continue;
+    if (prev != null && e > prev) ascent += e - prev;
+    prev = e;
+    min = Math.min(min, e); max = Math.max(max, e);
+  }
+  if (!isFinite(min) || max - min < 2) return null; // brak danych o wysokości
+  const seg = max - min;
+  const xy: [number, number][] = [];
+  for (let i = 0; i < ds.lat.length; i++) {
+    const e = ds.ele[i];
+    if (e == null) continue;
+    xy.push([(ds.cum[i] / (totalKm * 1000)) * W, H - 2 - ((e - min) / seg) * (H - 6)]);
+  }
+  if (xy.length < 2) return null;
+  const line = "M" + xy.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L");
+  const area = `${line} L ${xy[xy.length - 1][0].toFixed(1)} ${H} L ${xy[0][0].toFixed(1)} ${H} Z`;
+  const curX = cur != null ? (cur / totalKm) * W : null;
+  return (
+    <div className="profile">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+        <path d={area} className="pa" />
+        <path d={line} className="pl" />
+        {curX != null && <line x1={curX} y1={0} x2={curX} y2={H} className="pc" />}
+      </svg>
+      <div className="pcap">↑ {Math.round(ascent)} m · max {Math.round(max)} m n.p.m.</div>
+    </div>
+  );
 }
 
 function notify(title: string, body: string) {
@@ -458,6 +492,14 @@ export default function App() {
     () => (hereKm != null ? gapBeforeStretch(gaps, hereKm, range) : null),
     [gaps, hereKm, range],
   );
+  const nextWater = useMemo(
+    () => (hereKm != null && route && active.has("water") ? nextOfCat(pois, "water", hereKm, route.isLoop, totalKm) : null),
+    [pois, hereKm, route, totalKm, active],
+  );
+  const waterGapWarn = useMemo(
+    () => (hereKm != null && active.has("water") ? gapBeforeStretch(gapsByCat(pois, "water", 25), hereKm, range) : null),
+    [pois, hereKm, range, active],
+  );
   const favPois = useMemo(() => pois.filter((p) => favorites.has(pid(p))), [pois, favorites]);
   const planDays = useMemo(
     () => (trip && ds && pois.length ? planTrip(ds, pois, totalKm, trip.cfg, favorites, trip.overrides) : []),
@@ -541,8 +583,11 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {ds && <ElevationProfile ds={ds} totalKm={totalKm} cur={hereKm} />}
               {shopWarn && shopWarn.delta > 20 && <div className="warn">⚠️ Następny sklep za <b>{shopWarn.delta.toFixed(1)} km</b> ({shopWarn.p.name}). Zatankuj zapasy.</div>}
               {gapWarn && <div className="warn">⚠️ Za <b>{gapWarn.kmTo.toFixed(1)} km</b> ostatni sklep przed odcinkiem <b>{gapWarn.gapKm.toFixed(0)} km bez zaopatrzenia</b>.</div>}
+              {nextWater && nextWater.delta > 25 && <div className="warn water">💧 Następna woda dopiero za <b>{nextWater.delta.toFixed(1)} km</b>. Uzupełnij wcześniej.</div>}
+              {waterGapWarn && <div className="warn water">💧 Za <b>{waterGapWarn.kmTo.toFixed(1)} km</b> ostatnia woda przed odcinkiem <b>{waterGapWarn.gapKm.toFixed(0)} km bez wody</b>.</div>}
               {favAhead && <div className="warn fav">★ Do ulubionego: <b>{favAhead.p.name}</b> za <b>{favAhead.delta.toFixed(1)} km</b>{(() => { const e = etaAheadDelta(ds!, time, favAhead.delta, hereKm!, totalKm); return e != null ? ` (⏱ ${fmtDur(e)})` : ""; })()}.</div>}
               {!ahead.length ? (
                 <p className="empty">Nic w zasięgu {range} km dla wybranych filtrów.</p>
@@ -586,6 +631,7 @@ export default function App() {
                   {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
                 </div>
               </div>
+              {route && ds && <ElevationProfile ds={ds} totalKm={totalKm} cur={null} />}
               {pois.length > 0 && (
                 <ul className="list">
                   {pois.filter(visible).map((p) => {

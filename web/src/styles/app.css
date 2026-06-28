@@ -70,7 +70,15 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .warn { margin: 10px 12px; padding: 11px 13px; border-radius: 10px; font-size: 12.5px; background: #2a1416; color: #ffc9c9; }
 .warn b { color: #fff; }
 .warn.fav { background: #2a2410; color: #ffe9a8; }
+.warn.water { background: #102a3f; color: #bfe6ff; }
 .offroute { color: var(--warn); font-weight: 700; }
+
+.profile { padding: 10px 12px 4px; }
+.profile svg { width: 100%; height: 40px; display: block; }
+.profile .pa { fill: #19e0d622; }
+.profile .pl { fill: none; stroke: var(--route); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.profile .pc { stroke: var(--here); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.profile .pcap { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 2px; }
 
 .nextrow { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .nextrow .cell { flex: 1; min-width: 0; padding: 9px 5px; text-align: center; border-right: 1px solid var(--line); }
