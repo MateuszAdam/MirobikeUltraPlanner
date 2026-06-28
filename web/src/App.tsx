@@ -8,7 +8,7 @@ import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS, ORDER } from "./lib/categories";
 import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
-import { db, listBundles, putBundle, deleteBundle, ensurePersistence, type StoredBundle } from "./lib/db";
+import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, setMeta, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { getUser, signInWithEmail, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
 import type { CatKey, DownRoute, FoodGap, Poi, Route, TripState } from "./lib/types";
@@ -169,6 +169,8 @@ export default function App() {
   useEffect(() => {
     ensurePersistence();
     refreshSaved();
+    // Wznów ostatnią trasę po reloadzie (iOS lubi ubić kartę na długiej jeździe).
+    getMeta("lastRoute").then((last) => { if (last) loadSaved(last); });
     if (!isSupabaseConfigured()) return;
     getUser().then((u) => setUserEmail(u?.email ?? null));
     // Po zalogowaniu (też powrót z magic-linka) auto-pobierz trasy z chmury do offline.
@@ -184,6 +186,17 @@ export default function App() {
     });
     return off;
   }, [refreshSaved]);
+
+  // Lekki zrzut stanu jazdy (km + progi alertów) do IndexedDB — przetrwa reload na trasie.
+  useEffect(() => {
+    if (hereKm == null || !name) return;
+    const t = setTimeout(() => {
+      const alerted: Record<string, number[]> = {};
+      alertedRef.current.forEach((set, id) => { alerted[id] = [...set]; });
+      setMeta(`ride:${name}`, JSON.stringify({ km: hereKm, alerted })).catch(() => {});
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [hereKm, name]);
 
   // przy przełączeniu na mapę: dopasuj rozmiar i dośrodkuj na mojej pozycji
   useEffect(() => {
@@ -280,6 +293,7 @@ export default function App() {
     const now = new Date().toISOString();
     bundle.updated_at = now;
     await putBundle({ name, bundle, favorites: [...favSet], updated_at: now, dirty: true });
+    await setMeta("lastRoute", name);
     await refreshSaved();
     pushSoon();
   }
@@ -288,7 +302,18 @@ export default function App() {
     if (!sb) return;
     applyRoute(routeFromBundle(sb.bundle), n, poisFromBundle(sb.bundle), new Set(sb.favorites), sb.bundle.trip ?? null);
     setDs(downsampledFromBundle(sb.bundle));
-    setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc).`);
+    await setMeta("lastRoute", n);
+    // wznów stan jazdy (km + progi alertów), jeśli zapisany
+    try {
+      const rs = await getMeta(`ride:${n}`);
+      if (rs) {
+        const o = JSON.parse(rs);
+        if (typeof o.km === "number") { setHereKm(o.km); setStatus(`Wznowiono: ${n} — jesteś na ${o.km.toFixed(1)} km.`); }
+        if (o.alerted) alertedRef.current = new Map(Object.entries(o.alerted).map(([id, arr]) => [id, new Set(arr as number[])]));
+      } else {
+        setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc).`);
+      }
+    } catch { setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc).`); }
   }
   async function removeSaved(n: string) {
     await deleteBundle(n);
