@@ -20,9 +20,18 @@ Apka jest w katalogu `web/` na gałęzi `rewrite`. Najpierw zmerguj `rewrite` do
 1. Pobierz binarkę `pmtiles`: https://github.com/protomaps/go-pmtiles/releases (dodaj do PATH).
 2. W katalogu `web`: `MAXZOOM=14 ./scripts/build-pmtiles.sh` → powstanie `poland-border.pmtiles`
    (Polska + ~50 km bufor graniczny; z10 ≈ 135 MB, z14 więcej).
+   Bezpośrednio: `./pmtiles.exe extract https://demo-bucket.protomaps.com/v4.pmtiles poland-border.pmtiles --bbox=13.4,48.5,24.8,55.4 --maxzoom=13`
+   (z13 = ulice widać; z14 ~1 GB+; z10 ≈ 135 MB bez ulic).
 3. Cloudflare → R2 → utwórz bucket (np. `mirobike-maps`) → wgraj plik → włącz **public access**
-   (R2.dev URL lub własna subdomena). Skopiuj publiczny URL pliku `.pmtiles`.
-4. URL trafia do `VITE_PMTILES_URL` (krok 3). Bez tego mapa działa, ale online (OSM raster), nie offline.
+   (R2.dev URL lub własna subdomena). Duży plik: `npx wrangler r2 object put mirobike-maps/poland-border.pmtiles --file=poland-border.pmtiles`.
+4. ⚠️ **CORS na buckecie** (R2 → Settings → CORS policy) — bez tego mapa offline nie załaduje się:
+   ```json
+   [{ "AllowedOrigins": ["https://www.mirobike.grapevest.pl","http://localhost:5173","http://localhost:5174"],
+      "AllowedMethods": ["GET","HEAD"],
+      "AllowedHeaders": ["range","if-match"],
+      "ExposeHeaders": ["etag","content-range","content-length"] }]
+   ```
+5. Skopiuj publiczny URL `.pmtiles` → `VITE_PMTILES_URL`. Bez tego mapa działa, ale online (OSM raster), nie offline.
 
 ## 3. Vercel (hosting)
 1. vercel.com → Add New → Project → import repo `MirobikeUltraPlanner`.
@@ -60,11 +69,15 @@ Workflow `.github/workflows/keepalive.yml` pinguje codziennie. (Możesz odpalić
 Kod-część jest już zrobiona: `<title>`, opis, Open Graph, `canonical`, `robots.txt`, `sitemap.xml`,
 `noscript` z opisem dla crawlerów. Twoje kroki:
 
+> ⚠️ KOLEJNOŚĆ: najpierw deploy + DNS (kroki 3–4), aż `https://www.mirobike.grapevest.pl/sitemap.xml`
+> otwiera się w przeglądarce. Dopóki strona nie żyje, GSC pokaże „Couldn't fetch".
+
 1. **Google Search Console** (search.google.com/search-console):
-   - Dodaj zasób. Najlepiej **Domain** (`grapevest.pl`) — wtedy wymaga **weryfikacji DNS**:
-     OVH → Strefa DNS → dodaj rekord **TXT** o treści, którą poda GSC. (Albo zasób „URL prefix"
-     dla `https://www.mirobike.grapevest.pl/` i weryfikacja przez plik/HTML tag.)
-   - Po weryfikacji: **Sitemaps** → podaj `sitemap.xml` → Submit.
+   - Jeśli masz już **Domain property** `grapevest.pl` (działają sitemapy grapevest.pl/docs) — obejmuje ono
+     też `www.mirobike.grapevest.pl`, więc NIE musisz nic weryfikować. Jeśli masz tylko „URL prefix",
+     dodaj zasób **Domain** `grapevest.pl` i zweryfikuj rekordem **TXT** w OVH (obejmie wszystkie subdomeny).
+   - **Sitemaps** → wpisz **pełny URL pliku**: `https://www.mirobike.grapevest.pl/sitemap.xml` → Submit.
+     (NIE wpisuj samego `/` — to adres strony, nie sitemapy; stąd „Unknown / Couldn't fetch".)
    - **URL Inspection** → wklej `https://www.mirobike.grapevest.pl/` → **Request indexing**.
 2. **Bing Webmaster Tools** (opcjonalnie) — analogicznie, można zaimportować z GSC.
 3. **Sprawdź podgląd linku** (jak wygląda udostępnienie): https://www.opengraph.xyz/ (wklej URL).
