@@ -777,9 +777,15 @@ document.getElementById('saved').addEventListener('change',e=>{
   catch(err){ setStatus("Błąd wczytania: "+err.message); }
 });
 document.getElementById('del').addEventListener('click',()=>{
-  let cur=""; try{cur=localStorage.getItem("mb_last")||"";}catch(e){}
+  const sel=document.getElementById('saved');
+  let cur=sel?sel.value:"";
+  if(!cur){ try{cur=localStorage.getItem("mb_last")||"";}catch(e){} }
   if(!cur){ setStatus("Brak zapisanej trasy do usunięcia."); return; }
-  try{ localStorage.removeItem("mb_bundle:"+cur); localStorage.removeItem("mb_last"); }catch(e){}
+  try{
+    localStorage.removeItem("mb_bundle:"+cur);
+    localStorage.removeItem("mb_fav:"+cur);
+    if((localStorage.getItem("mb_last")||"")===cur) localStorage.removeItem("mb_last");
+  }catch(e){}
   refreshSaved(); setStatus("Usunięto „"+cur+"” z pamięci offline. Odśwież, by wczytać domyślną.");
 });
 
