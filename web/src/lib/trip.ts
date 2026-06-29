@@ -1,6 +1,28 @@
-import { buildTimeProfile, timeAtKm } from "./eta";
+import { timeAtKm, CLIMB_PENALTY_M } from "./eta";
 import { pid } from "./geo";
 import type { DownRoute, Poi, ModeKey, TripConfig, Override } from "./types";
+
+/** Współczynnik zmęczenia: każdy kolejny dzień ~5% wolniej (podłoga 0.7). */
+export function fatigueFactor(dayIndex: number): number {
+  return Math.max(0.7, 1 - 0.05 * dayIndex);
+}
+
+/** Profil czasu z malejącą prędkością wg numeru dnia (zmęczenie wielodniowe). */
+function fatiguedTime(ds: DownRoute, speedKmh: number, dailyKm: number): number[] {
+  const t = [0];
+  const vBase = (speedKmh * 1000) / 3600;
+  const pen = 3600 / CLIMB_PENALTY_M;
+  for (let i = 1; i < ds.lat.length; i++) {
+    const seg = Math.max(0, ds.cum[i] - ds.cum[i - 1]);
+    const day = Math.floor(ds.cum[i - 1] / 1000 / dailyKm);
+    const v = vBase * fatigueFactor(day);
+    let up = 0;
+    const a = ds.ele[i], b = ds.ele[i - 1];
+    if (a != null && b != null) up = Math.max(0, a - b);
+    t.push(t[i - 1] + seg / v + up * pen);
+  }
+  return t;
+}
 
 export interface Mode {
   key: ModeKey;
@@ -78,7 +100,7 @@ export function planTrip(
   favorites: Set<string>,
   overrides: Record<number, Override> = {},
 ): PlanDay[] {
-  const time = buildTimeProfile(ds, cfg.speedKmh).time;
+  const time = fatiguedTime(ds, cfg.speedKmh, cfg.dailyKm);
   const startMs = Date.parse(cfg.startISO) || Date.parse(new Date().toISOString());
   const nDays = Math.max(1, Math.ceil(totalKm / cfg.dailyKm));
   const days: PlanDay[] = [];

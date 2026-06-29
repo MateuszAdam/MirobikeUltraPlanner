@@ -4,6 +4,7 @@ interface GpsOpts {
   onFix: (lat: number, lon: number, accuracy: number) => void;
   canTrack: () => boolean; // czy jest wczytana trasa
   setStatus: (s: string) => void;
+  lowPower?: () => boolean; // tryb oszczędzania baterii
 }
 
 /** Śledzenie GPS + Wake Lock (z odzyskiwaniem po wygaszeniu ekranu). */
@@ -44,10 +45,11 @@ export function useGps(opts: GpsOpts) {
     setStatus("Szukam pozycji GPS… zezwól na dostęp do lokalizacji.");
     try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch { /* ignore */ }
     try { wakeLockRef.current = await (navigator as any).wakeLock?.request("screen"); } catch { /* brak wsparcia */ }
+    const low = optsRef.current.lowPower?.() ?? false;
     watchId.current = navigator.geolocation.watchPosition(
       (p) => optsRef.current.onFix(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 0),
       (e) => { setGpsOn(false); setStatus("GPS niedostępny: " + e.message + " (wymaga HTTPS i zgody na lokalizację)."); },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 },
+      { enableHighAccuracy: !low, maximumAge: low ? 15000 : 2000, timeout: 20000 },
     );
   }
 

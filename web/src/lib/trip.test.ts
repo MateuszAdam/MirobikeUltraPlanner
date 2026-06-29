@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { planTrip, candidates, MODES } from "./trip";
+import { planTrip, candidates, MODES, fatigueFactor } from "./trip";
 import type { DownRoute, Poi, TripConfig } from "./types";
+
+describe("fatigueFactor", () => {
+  it("maleje z numerem dnia, z podłogą 0.7", () => {
+    expect(fatigueFactor(0)).toBe(1);
+    expect(fatigueFactor(2)).toBeCloseTo(0.9, 5);
+    expect(fatigueFactor(2)).toBeLessThan(fatigueFactor(0));
+    expect(fatigueFactor(20)).toBe(0.7);
+  });
+});
 
 const ds: DownRoute = { lat: [50, 50], lon: [15, 21], cum: [0, 600000], ele: [undefined, undefined] };
 

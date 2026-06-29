@@ -73,6 +73,8 @@ export default function App() {
   const [active, setActive] = useState<Set<CatKey>>(new Set(FILTER_CATS));
   const [favOnly, setFavOnly] = useState(false);
   const [open24Only, setOpen24Only] = useState(false);
+  const [lowPower, setLowPower] = useState(false);
+  const [rideMode, setRideMode] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [range, setRange] = useState(100);
   const [fetchRadius, setFetchRadius] = useState(500);
@@ -107,6 +109,7 @@ export default function App() {
     onFix: (lat, lon, acc) => setHere(lat, lon, true, acc),
     canTrack: () => !!route,
     setStatus,
+    lowPower: () => lowPower,
   });
 
   const totalKm = route ? route.totalM / 1000 : 0;
@@ -530,6 +533,8 @@ export default function App() {
         {missing > 0 && <button className="chip refetch" disabled={fetching} onClick={() => doFetch(true)}>⬇ Dobierz brakujące ({missing})</button>}
         <button className={"chip gps " + (gpsOn ? "on" : "")} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
         <button className={"chip " + (open24Only ? "on" : "")} title="Tylko czynne całodobowo" onClick={() => setOpen24Only((v) => !v)}>🌙 24h</button>
+        <button className={"chip " + (rideMode ? "on" : "")} title="Tryb jazdy — duży ekran" onClick={() => setRideMode(true)}>🚴 Jazda</button>
+        <button className={"chip " + (lowPower ? "on" : "")} title="Oszczędzanie baterii" onClick={() => setLowPower((v) => !v)}>🔋</button>
         {FILTER_CATS.map((c) => (
           <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
             <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
@@ -719,6 +724,29 @@ export default function App() {
       )}
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
       {showAbout && <AboutSheet onClose={() => setShowAbout(false)} supportUrl={SUPPORT_URL} />}
+
+      {rideMode && (
+        <div className="ride" onClick={() => setRideMode(false)}>
+          {hereKm != null && route ? (
+            <>
+              <div className="rkm">{hereKm.toFixed(1)}<span> km</span></div>
+              <div className="rsub">{(totalKm - hereKm).toFixed(0)} km do końca{time.length ? ` · ⏱ ≈ ${fmtDur(timeAtKm(ds!, time, totalKm)! - timeAtKm(ds!, time, hereKm)!)}` : ""}</div>
+              <div className="rcells">
+                {nextByCat.slice(0, 4).map(({ c, n }) => (
+                  <div className="rcell" key={c}>
+                    <div className="rlab" style={{ color: CAT_COLOR[c] }}>{CATS[c].label}</div>
+                    <div className="rval">{n ? `${n.delta.toFixed(1)} km` : "—"}</div>
+                    <div className="rname">{n ? n.p.name : "brak"}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="rsub">Włącz GPS albo dotknij mapy, by zobaczyć pozycję.</div>
+          )}
+          <div className="rhint">dotknij, by wyjść{lowPower ? " · 🔋 oszczędzanie" : ""}</div>
+        </div>
+      )}
     </div>
   );
 }
