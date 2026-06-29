@@ -39,6 +39,11 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [pts] } };
 }
 
+// Wymusza warstwy nakładki nad podkładem (wektorowy PMTiles potrafi je „zakopać").
+function bumpOverlays(m: maplibregl.Map) {
+  for (const id of ["mb_route", "mb_acc", "mb_km", "mb_here", "mb_pois"]) if (m.getLayer(id)) m.moveLayer(id);
+}
+
 let audioCtx: AudioContext | null = null;
 function beep() {
   try {
@@ -115,7 +120,8 @@ export default function App() {
   const totalKm = route ? route.totalM / 1000 : 0;
   const refreshSaved = useCallback(async () => setSaved(await listBundles()), []);
   const visible = useCallback(
-    (p: Poi) => p.cats.some((c) => active.has(c)) && (!favOnly || favorites.has(pid(p))) && (!open24Only || is24h(p.tags)),
+    // filtr po kategorii głównej (zgodnie z kolorem kropki) — odznaczenie „nocleg" chowa wszystkie noclegi
+    (p: Poi) => active.has(p.cats[0]) && (!favOnly || favorites.has(pid(p))) && (!open24Only || is24h(p.tags)),
     [active, favOnly, favorites, open24Only],
   );
 
@@ -128,47 +134,48 @@ export default function App() {
 
   // ---- init mapy ----
   useEffect(() => {
-    if (!mapDiv.current || map.current) return;
+    if (!mapDiv.current) return;
     const m = new maplibregl.Map({
       container: mapDiv.current, style: buildStyle(), center: [19.0, 52.0], zoom: 5,
       attributionControl: { compact: true },
     });
+    map.current = m;
     m.addControl(new maplibregl.NavigationControl(), "top-right");
     m.on("load", () => {
-      m.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "route", type: "line", source: "route", paint: { "line-color": "#19e0d6", "line-width": 4 } });
-      m.addSource("acc", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "acc", type: "fill", source: "acc", paint: { "fill-color": "#ffd23f", "fill-opacity": 0.08 } });
-      m.addSource("km", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addSource("mb_route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addLayer({ id: "mb_route", type: "line", source: "mb_route", paint: { "line-color": "#19e0d6", "line-width": 4 } });
+      m.addSource("mb_acc", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addLayer({ id: "mb_acc", type: "fill", source: "mb_acc", paint: { "fill-color": "#ffd23f", "fill-opacity": 0.08 } });
+      m.addSource("mb_km", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       m.addLayer({
-        id: "km", type: "symbol", source: "km",
+        id: "mb_km", type: "symbol", source: "mb_km",
         layout: { "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Regular"] },
         paint: { "text-color": "#19e0d6", "text-halo-color": "#0c0d10", "text-halo-width": 1.5 },
       });
-      m.addSource("here", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "here", type: "circle", source: "here", paint: { "circle-radius": 8, "circle-color": "#ffd23f", "circle-stroke-color": "#3a2e00", "circle-stroke-width": 2 } });
-      m.addSource("pois", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addSource("mb_here", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addLayer({ id: "mb_here", type: "circle", source: "mb_here", paint: { "circle-radius": 8, "circle-color": "#ffd23f", "circle-stroke-color": "#3a2e00", "circle-stroke-width": 2 } });
+      m.addSource("mb_pois", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       m.addLayer({
-        id: "pois", type: "circle", source: "pois",
+        id: "mb_pois", type: "circle", source: "mb_pois",
         paint: {
           "circle-radius": ["case", ["get", "fav"], 7, 5], "circle-stroke-width": 1, "circle-stroke-color": "#0c0d10",
           "circle-color": ["match", ["get", "cat"], "food", CAT_COLOR.food, "sleep", CAT_COLOR.sleep, "fuel", CAT_COLOR.fuel, "eat", CAT_COLOR.eat, "water", CAT_COLOR.water, "bike", CAT_COLOR.bike, "pharmacy", CAT_COLOR.pharmacy, "spot", CAT_COLOR.spot, "#999"],
         },
       });
-      m.on("click", "pois", (e) => {
+      m.on("click", "mb_pois", (e) => {
         const id = e.features?.[0]?.properties?.id as string | undefined;
         if (id) setDetail(pidIndexRef.current.get(id) ?? null);
       });
-      m.on("click", "km", (e) => {
+      m.on("click", "mb_km", (e) => {
         const c = (e.features?.[0]?.geometry as GeoJSON.Point)?.coordinates;
         if (c) setHere(c[1], c[0]);
       });
       m.on("click", (e) => {
-        if (!m.queryRenderedFeatures(e.point, { layers: ["pois", "km"] }).length) setHere(e.lngLat.lat, e.lngLat.lng);
+        if (!m.queryRenderedFeatures(e.point, { layers: ["mb_pois", "mb_km"] }).length) setHere(e.lngLat.lat, e.lngLat.lng);
       });
       setReady(true);
     });
-    map.current = m;
+    return () => { m.remove(); map.current = null; setReady(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -209,18 +216,23 @@ export default function App() {
     const m = map.current;
     if (!ready || !m || mapView !== "map") return;
     setTimeout(() => {
-      m.resize();
+      m.resize(); // mapa była display:none w widoku listy → dopasuj rozmiar i kadr
       const ll = hereLLRef.current;
-      if (ll) m.flyTo({ center: [ll.lon, ll.lat], zoom: Math.max(m.getZoom(), 14), duration: 500 });
-    }, 60);
-  }, [mapView, ready]);
+      if (ll) {
+        m.flyTo({ center: [ll.lon, ll.lat], zoom: Math.max(m.getZoom(), 14), duration: 500 });
+      } else if (route) {
+        const lons = route.pts.map((p) => p.lon), lats = route.pts.map((p) => p.lat);
+        m.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 40, duration: 0 });
+      }
+    }, 80);
+  }, [mapView, ready, route]);
 
   // ---- warstwy: trasa + km ----
   useEffect(() => {
     const m = map.current;
     if (!ready || !m) return;
-    const rsrc = m.getSource("route") as maplibregl.GeoJSONSource | undefined;
-    const ksrc = m.getSource("km") as maplibregl.GeoJSONSource | undefined;
+    const rsrc = m.getSource("mb_route") as maplibregl.GeoJSONSource | undefined;
+    const ksrc = m.getSource("mb_km") as maplibregl.GeoJSONSource | undefined;
     if (route && ds) {
       const coords = route.pts.map((p) => [p.lon, p.lat]);
       rsrc?.setData({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } });
@@ -232,6 +244,7 @@ export default function App() {
       rsrc?.setData({ type: "FeatureCollection", features: [] });
       ksrc?.setData({ type: "FeatureCollection", features: [] });
     }
+    bumpOverlays(m);
   }, [route, ds, totalKm, ready]);
 
   // ---- warstwa: POI (filtrowana) ----
@@ -243,7 +256,8 @@ export default function App() {
       properties: { id: pid(p), cat: p.cats[0], fav: favorites.has(pid(p)) },
       geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
     }));
-    (m.getSource("pois") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: feats });
+    (m.getSource("mb_pois") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: feats });
+    bumpOverlays(m);
   }, [pois, visible, favorites, ready]);
 
   // ---- akcje ----
@@ -379,8 +393,8 @@ export default function App() {
     setHereKm(km); setHereOff(pr.detourM);
     hereLLRef.current = { lat, lon };
     const m = map.current;
-    (m?.getSource("here") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lon, lat] } });
-    (m?.getSource("acc") as maplibregl.GeoJSONSource | undefined)?.setData(
+    (m?.getSource("mb_here") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lon, lat] } });
+    (m?.getSource("mb_acc") as maplibregl.GeoJSONSource | undefined)?.setData(
       accuracy > 0 ? circlePolygon(lat, lon, accuracy) : { type: "FeatureCollection", features: [] },
     );
     // kamera: pierwszy fix / zoom-out → przybliż na mnie; potem płynnie podążaj
