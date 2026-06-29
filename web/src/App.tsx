@@ -12,7 +12,7 @@ import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, s
 import { isSupabaseConfigured } from "./lib/supabase";
 import { getUser, signInWithEmail, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
 import type { CatKey, DownRoute, FoodGap, Poi, Route, TripState } from "./lib/types";
-import { CAT_COLOR, is24h } from "./lib/ui";
+import { CAT_COLOR, is24h, fmtDist } from "./lib/ui";
 import { ElevationProfile } from "./components/ElevationProfile";
 import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/Sheets";
 import { useGps } from "./hooks/useGps";
@@ -41,7 +41,7 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
 
 // Wymusza warstwy nakładki nad podkładem (wektorowy PMTiles potrafi je „zakopać").
 function bumpOverlays(m: maplibregl.Map) {
-  for (const id of ["mb_route", "mb_acc", "mb_km", "mb_here", "mb_pois"]) if (m.getLayer(id)) m.moveLayer(id);
+  for (const id of ["mb_route_case", "mb_route", "mb_acc", "mb_km", "mb_here", "mb_pois"]) if (m.getLayer(id)) m.moveLayer(id);
 }
 
 let audioCtx: AudioContext | null = null;
@@ -144,14 +144,15 @@ export default function App() {
     m.addControl(new maplibregl.NavigationControl(), "top-right");
     m.on("load", () => {
       m.addSource("mb_route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "mb_route", type: "line", source: "mb_route", paint: { "line-color": "#19e0d6", "line-width": 4 } });
+      m.addLayer({ id: "mb_route_case", type: "line", source: "mb_route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#ffffff", "line-width": 8, "line-opacity": 0.85 } });
+      m.addLayer({ id: "mb_route", type: "line", source: "mb_route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#1f6fff", "line-width": 5 } });
       m.addSource("mb_acc", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       m.addLayer({ id: "mb_acc", type: "fill", source: "mb_acc", paint: { "fill-color": "#ffd23f", "fill-opacity": 0.08 } });
       m.addSource("mb_km", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       m.addLayer({
         id: "mb_km", type: "symbol", source: "mb_km",
-        layout: { "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Regular"] },
-        paint: { "text-color": "#19e0d6", "text-halo-color": "#0c0d10", "text-halo-width": 1.5 },
+        layout: { "text-field": ["get", "label"], "text-size": 14, "text-font": ["Noto Sans Regular"], "text-allow-overlap": false, "text-padding": 6 },
+        paint: { "text-color": "#1f3a8a", "text-halo-color": "#ffffff", "text-halo-width": 2.4 },
       });
       m.addSource("mb_here", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       m.addLayer({ id: "mb_here", type: "circle", source: "mb_here", paint: { "circle-radius": 8, "circle-color": "#ffd23f", "circle-stroke-color": "#3a2e00", "circle-stroke-width": 2 } });
@@ -573,16 +574,15 @@ export default function App() {
           {hereKm != null && route ? (
             <>
               <div className="here">
-                <div className="lab">jesteś na</div>
+                <div className="lab">{offRoute ? "najbliżej trasy" : "jesteś na"}</div>
                 <div className="km">{hereKm.toFixed(1)}<small> / {totalKm.toFixed(0)} km</small></div>
                 <div className="meta">
                   {(totalKm - hereKm).toFixed(1)} km do końca
                   {time.length ? ` · ⏱ ≈ ${fmtDur(timeAtKm(ds!, time, totalKm)! - timeAtKm(ds!, time, hereKm)!)}` : ""}
-                  {offRoute
-                    ? <span className="offroute"> · {hereOff} m od trasy (poza trasą?)</span>
-                    : ` · ${hereOff} m od trasy`}
+                  {!offRoute && ` · ${fmtDist(hereOff)} od trasy`}
                 </div>
               </div>
+              {offRoute && <div className="warn">⚠️ Jesteś <b>{fmtDist(hereOff)}</b> od trasy — wygląda, że jesteś poza nią. Pokazany km to najbliższy punkt trasy.</div>}
               {nextByCat.length > 0 && (
                 <div className="nextrow">
                   {nextByCat.map(({ c, n }) => (
@@ -610,7 +610,7 @@ export default function App() {
                     return (
                       <li key={id} onClick={() => setDetail(p)}>
                         <span className="dot" style={{ background: CAT_COLOR[p.cats[0]] }} />
-                        <span className="nm">{p.name}<br /><small>{eta != null ? `⏱ ${fmtDur(eta)} · ` : ""}{p.detourM} m {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
+                        <span className="nm">{p.name}<br /><small>{eta != null ? `⏱ ${fmtDur(eta)} · ` : ""}{fmtDist(p.detourM)} {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
                         <span className="km">+{delta.toFixed(1)}</span>
                         <span className={"star " + (favorites.has(id) ? "is" : "")} onClick={(e) => { e.stopPropagation(); toggleFav(id); }}>{favorites.has(id) ? "★" : "☆"}</span>
                       </li>
@@ -650,7 +650,7 @@ export default function App() {
                     return (
                       <li key={id} onClick={() => setDetail(p)}>
                         <span className="dot" style={{ background: CAT_COLOR[p.cats[0]] }} />
-                        <span className="nm">{p.name}<br /><small>km {p.km.toFixed(1)} · {p.detourM} m {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
+                        <span className="nm">{p.name}<br /><small>km {p.km.toFixed(1)} · {fmtDist(p.detourM)} {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
                         <span className={"star " + (favorites.has(id) ? "is" : "")} onClick={(e) => { e.stopPropagation(); toggleFav(id); }}>{favorites.has(id) ? "★" : "☆"}</span>
                       </li>
                     );

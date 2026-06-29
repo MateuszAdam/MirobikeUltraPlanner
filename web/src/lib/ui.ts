@@ -6,6 +6,12 @@ export const CAT_COLOR: Record<CatKey, string> = {
   water: "#38bdf8", bike: "#9aa3b2", pharmacy: "#ff5a8a", spot: "#c77dff",
 };
 
+/** Odległość: metry < 1 km jako „X m", powyżej jako „X,X km" (przecinek dziesiętny). */
+export function fmtDist(m: number): string {
+  if (m >= 1000) return (m / 1000).toFixed(1).replace(".", ",") + " km";
+  return Math.round(m) + " m";
+}
+
 /** Czy miejsce jest czynne całodobowo (OSM opening_hours = 24/7). */
 export function is24h(t?: Record<string, string>): boolean {
   return !!t?.opening_hours && /24\s*\/\s*7/.test(t.opening_hours);

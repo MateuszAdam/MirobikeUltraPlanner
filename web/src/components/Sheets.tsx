@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { pid } from "../lib/geo";
 import { etaAheadDelta, fmtDur } from "../lib/eta";
 import { CATS } from "../lib/categories";
-import { CAT_COLOR, is24h, defaultCfg } from "../lib/ui";
+import { CAT_COLOR, is24h, defaultCfg, fmtDist } from "../lib/ui";
 import { MODES, planTrip, candidates, fmtClock } from "../lib/trip";
 import type { DownRoute, Poi, TripState } from "../lib/types";
 
@@ -19,7 +19,7 @@ export function DetailSheet(props: {
       <div className="card" onClick={(e) => e.stopPropagation()}>
         <div className="dh"><b>{poi.name}</b><button onClick={onClose}>✕</button></div>
         <div className="dc" style={{ color: CAT_COLOR[poi.cats[0]] }}>{poi.cats.map((c) => CATS[c].label).join(" · ")}</div>
-        <div className="dr">km {poi.km.toFixed(1)} · {poi.detourM} m od trasy {poi.side}{t._custom ? " · 📌 własne" : ""}</div>
+        <div className="dr">km {poi.km.toFixed(1)} · {fmtDist(poi.detourM)} od trasy {poi.side}{t._custom ? " · 📌 własne" : ""}</div>
         {hereKm != null && ds && time.length ? (() => {
           const d = ((x: number) => (x < -0.05 && isLoop ? x + totalKm : x))(poi.km - hereKm);
           const eta = etaAheadDelta(ds, time, d, hereKm, totalKm);
@@ -128,10 +128,10 @@ export function PlannerSheet(props: {
                     </div>
                     {!d.isLast && (
                       <div className="stop">
-                        <div className="stoplab">🛏 Nocleg {d.sleep ? `· ${fmtClock(d.sleep.ms)} · km ${d.sleep.km.toFixed(0)} · ${d.sleep.poi.detourM} m` : "· brak w pobliżu"}</div>
+                        <div className="stoplab">🛏 Nocleg {d.sleep ? `· ${fmtClock(d.sleep.ms)} · km ${d.sleep.km.toFixed(0)} · ${fmtDist(d.sleep.poi.detourM)}` : "· brak w pobliżu"}</div>
                         <select value={trip.overrides[d.index]?.sleep ?? (d.sleep ? pid(d.sleep.poi) : "")} onChange={(e) => setOverride(d.index, "sleep", e.target.value)}>
                           <option value="">— auto / brak —</option>
-                          {sleepCands.map((p) => <option key={pid(p)} value={pid(p)}>{p.name} (km {p.km.toFixed(0)}, {p.detourM} m)</option>)}
+                          {sleepCands.map((p) => <option key={pid(p)} value={pid(p)}>{p.name} (km {p.km.toFixed(0)}, {fmtDist(p.detourM)})</option>)}
                         </select>
                         {d.sleep && <>
                           <button className="linkbtn" onClick={() => onOpenDetail(d.sleep!.poi)}>szczegóły</button>
