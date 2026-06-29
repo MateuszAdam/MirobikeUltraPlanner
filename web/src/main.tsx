@@ -2,9 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import { ensurePersistence } from "./lib/db";
-import App from "./App";
+import Root from "./Root";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles/app.css";
+import "./styles/auth.css";
 
 // Trwałe przechowywanie (krytyczne na iOS — patrz research: 7-dniowa eksmisja).
 ensurePersistence();
@@ -25,6 +26,6 @@ const updateSW = registerSW({
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <Root />
   </React.StrictMode>,
 );

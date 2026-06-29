@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MiroBike — Planer Ultra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --night:#0a0f1e;
+    --dusk:#111a33;
+    --dawn:#e7a14b;
+    --dawn-soft:rgba(231,161,75,.14);
+    --spoke:#5d6f93;
+    --ink:#eaf0ff;
+    --ink-dim:#94a3c4;
+    --ink-faint:#5d6b8a;
+    --card:rgba(17,24,44,.72);
+    --line:rgba(120,140,180,.16);
+    --err:#f0846b;
+    --ok:#7ddba6;
+    --r:14px;
+    --display:'Sora',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--body);
+    color:var(--ink);
+    background:
+      radial-gradient(120% 90% at 18% 78%, rgba(231,161,75,.10), transparent 46%),
+      linear-gradient(178deg, #070b16 0%, var(--night) 30%, var(--dusk) 100%);
+    min-height:100%;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- ambient wheel ---------- */
+  .scene{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+  .wheel{
+    position:absolute;
+    left:-16vmin;bottom:-22vmin;
+    width:86vmin;height:86vmin;
+    opacity:.9;
+    animation:spin 90s linear infinite;
+    transform-origin:50% 50%;
+  }
+  .wheel .rim{fill:none;stroke:var(--spoke);stroke-opacity:.55}
+  .wheel .spoke{stroke:var(--spoke);stroke-width:.6;stroke-opacity:.22}
+  .wheel .spoke.bright{stroke-opacity:.5}
+  .wheel .hub{fill:none;stroke:var(--dawn);stroke-opacity:.8}
+  .wheel .hubdot{fill:var(--dawn);fill-opacity:.85}
+  .arc{
+    position:absolute;left:-16vmin;bottom:-22vmin;width:86vmin;height:86vmin;
+    animation:spin 140s linear infinite reverse;transform-origin:50% 50%;
+  }
+  .arc circle{fill:none;stroke:var(--dawn);stroke-opacity:.5;stroke-width:.5;stroke-dasharray:2 26}
+  .horizon{position:absolute;left:0;right:0;bottom:0;height:34vh;
+    background:linear-gradient(0deg, var(--dawn-soft), transparent);}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---------- layout ---------- */
+  .wrap{position:relative;z-index:1;min-height:100vh;display:grid;
+    grid-template-columns:1.05fr .95fr;align-items:center;gap:5vw;
+    padding:clamp(24px,5vw,72px);max-width:1280px;margin:0 auto}
+
+  /* ---------- brand / hero ---------- */
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.34em;
+    text-transform:uppercase;color:var(--ink-dim);display:flex;gap:.7em;align-items:center}
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--dawn);opacity:.8}
+  .brand{font-family:var(--display);font-weight:700;letter-spacing:-.02em;
+    font-size:clamp(40px,7vw,76px);line-height:.96;margin:18px 0 0}
+  .brand b{color:var(--dawn);font-weight:700}
+  .thesis{font-size:clamp(16px,2.1vw,21px);color:var(--ink-dim);max-width:30ch;
+    margin-top:18px;line-height:1.5}
+  .thesis b{color:var(--ink);font-weight:600}
+
+  .acct{margin-top:34px;max-width:34ch;border-left:2px solid var(--dawn);
+    padding:2px 0 2px 16px}
+  .acct h3{font-family:var(--mono);font-size:11px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--dawn);font-weight:500;margin-bottom:8px}
+  .acct p{font-size:13.5px;color:var(--ink-dim);line-height:1.55}
+  .acct p + p{margin-top:7px}
+  .acct .free{color:var(--ink)}
+
+  /* ---------- auth card ---------- */
+  .card{
+    background:var(--card);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border:1px solid var(--line);border-radius:20px;
+    padding:clamp(24px,3vw,36px);max-width:430px;width:100%;justify-self:end;
+    box-shadow:0 30px 80px -40px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .tabs{display:flex;gap:4px;background:rgba(255,255,255,.03);
+    border:1px solid var(--line);border-radius:11px;padding:4px;margin-bottom:24px}
+  .tab{flex:1;border:0;background:transparent;color:var(--ink-dim);
+    font-family:var(--body);font-size:14px;font-weight:600;padding:9px;border-radius:8px;
+    cursor:pointer;transition:.18s}
+  .tab[aria-selected="true"]{background:rgba(231,161,75,.13);color:var(--ink)}
+  .tab:hover{color:var(--ink)}
+
+  .ctitle{font-family:var(--display);font-weight:600;font-size:22px;letter-spacing:-.01em}
+  .csub{font-size:13.5px;color:var(--ink-dim);margin-top:6px;line-height:1.5}
+
+  form{margin-top:22px;display:flex;flex-direction:column;gap:14px}
+  .field{display:flex;flex-direction:column;gap:7px}
+  .field label{font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-faint)}
+  .field input{
+    background:rgba(255,255,255,.04);border:1px solid var(--line);
+    border-radius:11px;padding:13px 14px;color:var(--ink);font-family:var(--body);
+    font-size:15px;transition:border-color .18s, box-shadow .18s;width:100%}
+  .field input::placeholder{color:var(--ink-faint)}
+  .field input:focus{outline:none;border-color:var(--dawn);
+    box-shadow:0 0 0 3px var(--dawn-soft)}
+  .field.bad input{border-color:var(--err)}
+  .hint{font-size:12px;color:var(--ink-faint);min-height:14px}
+  .hint.err{color:var(--err)}
+
+  .btn{border:0;border-radius:11px;padding:14px;font-family:var(--body);
+    font-weight:600;font-size:15px;cursor:pointer;transition:.18s;color:#1a1206}
+  .btn.primary{background:var(--dawn);box-shadow:0 8px 24px -10px var(--dawn)}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.primary:active{transform:translateY(1px)}
+
+  .row{display:flex;justify-content:space-between;align-items:center;
+    font-size:13px;margin-top:2px}
+  .link{background:0;border:0;color:var(--dawn);font-family:var(--body);
+    font-size:13px;cursor:pointer;padding:0;text-decoration:none}
+  .link:hover{text-decoration:underline}
+  .muted{color:var(--ink-dim)}
+
+  .divider{display:flex;align-items:center;gap:14px;color:var(--ink-faint);
+    font-size:11px;font-family:var(--mono);letter-spacing:.18em;margin:22px 0 0}
+  .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .ghost{width:100%;margin-top:18px;background:transparent;border:1px solid var(--line);
+    color:var(--ink);border-radius:11px;padding:13px;font-family:var(--body);
+    font-weight:600;font-size:14.5px;cursor:pointer;transition:.18s;
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .ghost:hover{border-color:var(--ink-dim);background:rgba(255,255,255,.03)}
+  .ghost .arrow{transition:transform .18s}
+  .ghost:hover .arrow{transform:translateX(3px)}
+
+  .note{background:rgba(125,219,166,.07);border:1px solid rgba(125,219,166,.18);
+    color:var(--ok);border-radius:11px;padding:14px;font-size:13.5px;line-height:1.5;
+    display:none}
+  .note.show{display:block}
+  .note b{color:#bff0d3}
+
+  [data-view]{display:none}
+  [data-view].active{display:block}
+
+  .foot{margin-top:22px;font-size:11.5px;color:var(--ink-faint);line-height:1.5;text-align:center}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .wrap{grid-template-columns:1fr;gap:34px;padding-top:40px;padding-bottom:48px}
+    .card{justify-self:stretch;max-width:none}
+    .acct{display:none}
+    .wheel{left:50%;bottom:auto;top:8%;transform:translateX(-50%);
+      width:120vmin;height:120vmin;opacity:.5}
+    .arc{left:50%;bottom:auto;top:8%;transform:translateX(-50%);width:120vmin;height:120vmin;opacity:.5}
+    .brand{font-size:clamp(38px,13vw,60px)}
+  }
+  @media (max-width:480px){
+    .wrap{padding:20px}
+    .card{padding:22px;border-radius:16px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .wheel,.arc{animation:none}
+  }
+</style>
+</head>
+<body>
+  <div class="scene" aria-hidden="true">
+    <svg class="wheel" viewBox="-100 -100 200 200" id="wheel">
+      <circle class="rim" r="96" stroke-width="1.1"/>
+      <circle class="rim" r="92" stroke-width="2.4" stroke-opacity=".3"/>
+      <g id="spokes"></g>
+      <circle class="hub" r="12" stroke-width="1.4"/>
+      <circle class="hub" r="6" stroke-width="1"/>
+      <circle class="hubdot" r="2.4"/>
+    </svg>
+    <svg class="arc" viewBox="-100 -100 200 200"><circle r="74"/></svg>
+    <div class="horizon"></div>
+  </div>
+
+  <main class="wrap">
+    <!-- hero -->
+    <section class="hero">
+      <div class="eyebrow">Planer ultra · offline · 444 km</div>
+      <h1 class="brand">Miro<b>Bike</b></h1>
+      <p class="thesis"><b>Wiedz, gdzie kupisz wodę i jedzenie</b> — zanim wjedziesz w ciemność. Trasa, sklepy i luki w jednej paczce offline.</p>
+
+      <div class="acct">
+        <h3>Po co konto?</h3>
+        <p class="free">Aplikacja działa w pełni bez konta — trasy i paczki są offline na tym urządzeniu.</p>
+        <p>Konto dodaje synchronizację między komputerem a telefonem i kopię w chmurze, gdy zmienisz sprzęt.</p>
+      </div>
+    </section>
+
+    <!-- auth card -->
+    <section class="card" aria-label="Logowanie">
+      <div class="tabs" id="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-go="login">Logowanie</button>
+        <button class="tab" role="tab" aria-selected="false" data-go="register">Rejestracja</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div data-view="login" class="active">
+        <h2 class="ctitle">Zaloguj się</h2>
+        <p class="csub">Wróć do swoich tras na każdym urządzeniu.</p>
+        <form id="form-login" novalidate>
+          <div class="field">
+            <label for="li-email">E-mail</label>
+            <input id="li-email" type="email" placeholder="ty@example.com" autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="li-pass">Hasło</label>
+            <input id="li-pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+          <div class="hint" data-hint></div>
+          <button class="btn primary" type="submit">Zaloguj się</button>
+          <div class="row">
+            <button type="button" class="link" data-go="reset">Nie pamiętasz hasła?</button>
+            <span class="muted">Nowy tutaj? <button type="button" class="link" data-go="register">Załóż konto</button></span>
+          </div>
+        </form>
+      </div>
+
+      <!-- REGISTER -->
+      <div data-view="register">
+        <h2 class="ctitle">Załóż konto</h2>
+        <p class="csub">Żeby synchronizować trasy z komputera na telefon.</p>
+        <form id="form-register" novalidate>
+          <div class="field">
+            <label for="re-email">E-mail</label>
+            <input id="re-email" type="email" placeholder="ty@example.com" autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="re-pass">Hasło</label>
+            <input id="re-pass" type="password" placeholder="min. 8 znaków" autocomplete="new-password" />
+          </div>
+          <div class="hint" data-hint>Hasło musi mieć co najmniej 8 znaków.</div>
+          <button class="btn primary" type="submit">Załóż konto</button>
+          <div class="row">
+            <span class="muted">Masz już konto? <button type="button" class="link" data-go="login">Zaloguj się</button></span>
+          </div>
+        </form>
+        <div class="note" data-note></div>
+      </div>
+
+      <!-- RESET REQUEST -->
+      <div data-view="reset">
+        <h2 class="ctitle">Zresetuj hasło</h2>
+        <p class="csub">Wyślemy link do ustawienia nowego hasła.</p>
+        <form id="form-reset" novalidate>
+          <div class="field">
+            <label for="rs-email">E-mail</label>
+            <input id="rs-email" type="email" placeholder="ty@example.com" autocomplete="email" />
+          </div>
+          <div class="hint" data-hint></div>
+          <button class="btn primary" type="submit">Wyślij link resetujący</button>
+          <div class="row">
+            <button type="button" class="link" data-go="login">← Wróć do logowania</button>
+          </div>
+        </form>
+        <div class="note" data-note></div>
+      </div>
+
+      <!-- NEW PASSWORD -->
+      <div data-view="newpass">
+        <h2 class="ctitle">Ustaw nowe hasło</h2>
+        <p class="csub">Wpisz nowe hasło do swojego konta.</p>
+        <form id="form-newpass" novalidate>
+          <div class="field">
+            <label for="np-pass">Nowe hasło</label>
+            <input id="np-pass" type="password" placeholder="min. 8 znaków" autocomplete="new-password" />
+          </div>
+          <div class="field">
+            <label for="np-pass2">Powtórz hasło</label>
+            <input id="np-pass2" type="password" placeholder="••••••••" autocomplete="new-password" />
+          </div>
+          <div class="hint" data-hint></div>
+          <button class="btn primary" type="submit">Ustaw hasło</button>
+        </form>
+        <div class="note" data-note></div>
+      </div>
+
+      <div class="divider">albo</div>
+      <button class="ghost" id="guest">Korzystaj bez konta <span class="arrow">→</span></button>
+
+      <p class="foot">Logując się, akceptujesz, że trasy z tego urządzenia trafią do Twojego konta i będą dostępne na innych urządzeniach.</p>
+    </section>
+  </main>
+
+<script>
+(function(){
+  /* ---- generate laced spokes ---- */
+  const g = document.getElementById('spokes');
+  const N = 28, hubR = 11, rimR = 92, cross = 5; // tangential lacing
+  let svg = '';
+  for(let i=0;i<N;i++){
+    const a = (i/N)*Math.PI*2;
+    const dir = i%2 ? cross : -cross;
+    const a2 = a + (dir/N)*Math.PI*2;
+    const hx = Math.cos(a)*hubR, hy = Math.sin(a)*hubR;
+    const rx = Math.cos(a2)*rimR, ry = Math.sin(a2)*rimR;
+    const bright = i%7===0 ? ' bright' : '';
+    svg += `<line class="spoke${bright}" x1="${hx.toFixed(2)}" y1="${hy.toFixed(2)}" x2="${rx.toFixed(2)}" y2="${ry.toFixed(2)}"/>`;
+  }
+  g.innerHTML = svg;
+
+  /* ---- view router ---- */
+  const card = document.querySelector('.card');
+  const tabs = document.getElementById('tabs');
+  function show(view){
+    document.querySelectorAll('[data-view]').forEach(v=>v.classList.toggle('active', v.dataset.view===view));
+    document.querySelectorAll('.note').forEach(n=>n.classList.remove('show'));
+    document.querySelectorAll('[data-hint]').forEach(h=>{ if(!h.dataset.keep) h.classList.remove('err'); });
+    // tab highlight only for login/register
+    tabs.style.display = (view==='login'||view==='register') ? 'flex' : 'none';
+    tabs.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected', String(t.dataset.go===view)));
+  }
+  card.addEventListener('click', e=>{
+    const go = e.target.closest('[data-go]');
+    if(go){ e.preventDefault(); show(go.dataset.go); }
+  });
+
+  const emailOk = v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
+  function setErr(form, msg){
+    const h = form.querySelector('[data-hint]');
+    if(h){ h.textContent = msg; h.classList.add('err'); }
+  }
+  function note(view, html){
+    const n = document.querySelector(`[data-view="${view}"] [data-note]`);
+    if(n){ n.innerHTML = html; n.classList.add('show'); }
+  }
+
+  /* ---- handlers (DEMO — podmień na Supabase Auth) ---- */
+  document.getElementById('form-login').addEventListener('submit', e=>{
+    e.preventDefault();
+    const email = li_email.value.trim(), pass = li_pass.value;
+    if(!emailOk(email)) return setErr(e.target,'Podaj poprawny adres e-mail.');
+    if(pass.length<8) return setErr(e.target,'Hasło ma co najmniej 8 znaków.');
+    // TODO: supabase.auth.signInWithPassword({ email, password: pass })
+    e.target.querySelector('.btn').textContent = 'Logowanie…';
+  });
+  document.getElementById('form-register').addEventListener('submit', e=>{
+    e.preventDefault();
+    const email = re_email.value.trim(), pass = re_pass.value;
+    if(!emailOk(email)) return setErr(e.target,'Podaj poprawny adres e-mail.');
+    if(pass.length<8) return setErr(e.target,'Hasło musi mieć co najmniej 8 znaków.');
+    // TODO: supabase.auth.signUp({ email, password: pass, options:{ emailRedirectTo } })
+    note('register', `Sprawdź skrzynkę — wysłaliśmy link potwierdzający na <b>${email}</b>.`);
+  });
+  document.getElementById('form-reset').addEventListener('submit', e=>{
+    e.preventDefault();
+    const email = rs_email.value.trim();
+    if(!emailOk(email)) return setErr(e.target,'Podaj poprawny adres e-mail.');
+    // TODO: supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    note('reset', `Jeśli istnieje konto dla <b>${email}</b>, wysłaliśmy na nie link do zresetowania hasła.`);
+  });
+  document.getElementById('form-newpass').addEventListener('submit', e=>{
+    e.preventDefault();
+    const p1 = np_pass.value, p2 = np_pass2.value;
+    if(p1.length<8) return setErr(e.target,'Hasło musi mieć co najmniej 8 znaków.');
+    if(p1!==p2) return setErr(e.target,'Hasła nie są takie same.');
+    // TODO: supabase.auth.updateUser({ password: p1 })
+    note('newpass', 'Hasło zmienione. <b>Możesz się zalogować.</b>');
+  });
+  document.getElementById('guest').addEventListener('click', ()=>{
+    // TODO: localStorage.setItem('mirobike.localMode','1'); router → /plan
+    document.getElementById('guest').textContent = 'Wchodzę bez konta…';
+  });
+
+  // demo: jeśli URL ma #recovery, pokaż ekran ustawiania hasła
+  if(location.hash.includes('recovery')) show('newpass');
+})();
+</script>
+</body>
+</html>

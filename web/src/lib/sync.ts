@@ -18,35 +18,61 @@ export async function getUser() {
   return data.user ?? null;
 }
 
-/** Nasłuch zmian sesji. Zwraca funkcję odpinającą. */
-export function onAuthChange(cb: (email: string | null) => void): () => void {
+/** Aktualny e-mail z sesji (albo null). */
+export async function getSessionEmail(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  const { data } = await getSupabase().auth.getSession();
+  return data.session?.user?.email ?? null;
+}
+
+export type AuthEvent =
+  | { type: "session"; email: string | null }
+  | { type: "recovery" };
+
+/**
+ * Nasłuch zmian sesji. Oddziela event PASSWORD_RECOVERY (powrót z linku resetu)
+ * od zwykłej zmiany sesji — App pokazuje wtedy ekran „Ustaw nowe hasło".
+ */
+export function onAuthChange(cb: (e: AuthEvent) => void): () => void {
   if (!isSupabaseConfigured()) return () => {};
-  const { data } = getSupabase().auth.onAuthStateChange((_e, session) => cb(session?.user?.email ?? null));
+  const { data } = getSupabase().auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") cb({ type: "recovery" });
+    else cb({ type: "session", email: session?.user?.email ?? null });
+  });
   return () => data.subscription.unsubscribe();
 }
 
 /** Logowanie e-mailem i hasłem — bez przekierowań, działa w PWA na iOS. */
-export async function signInWithPassword(email: string, password: string): Promise<void> {
+export async function signIn(email: string, password: string): Promise<void> {
   const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw error;
 }
 
 /**
- * Rejestracja kontem e-mail + hasło. Przy wyłączonym „Confirm email" w Supabase
- * od razu zwraca sesję (jesteś zalogowany bez klikania w link). Jeśli potwierdzanie
- * jest włączone, `session` będzie null — wtedy trzeba potwierdzić e-mail.
+ * Rejestracja kontem e-mail + hasło. Z włączonym „Confirm email" w Supabase
+ * `session` jest null → trzeba potwierdzić adres linkiem z maila (needsConfirm).
+ * Z wyłączonym potwierdzaniem od razu wraca sesja (needsConfirm=false).
  */
-export async function signUpWithPassword(email: string, password: string): Promise<{ needsConfirm: boolean }> {
-  const { data, error } = await getSupabase().auth.signUp({ email: email.trim(), password });
+export async function signUp(email: string, password: string): Promise<{ needsConfirm: boolean }> {
+  const { data, error } = await getSupabase().auth.signUp({
+    email: email.trim(), password,
+    options: { emailRedirectTo: `${window.location.origin}/?type=signup` },
+  });
   if (error) throw error;
   return { needsConfirm: !data.session };
 }
 
-/** Wysyła e-mail z linkiem do ustawienia nowego hasła. */
-export async function sendPasswordReset(email: string): Promise<void> {
+/** Wysyła e-mail z linkiem do ustawienia nowego hasła (wraca z ?type=recovery). */
+export async function requestReset(email: string): Promise<void> {
   const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: window.location.origin,
+    redirectTo: `${window.location.origin}/?type=recovery`,
   });
+  if (error) throw error;
+}
+
+/** Ustawia nowe hasło zalogowanej (w trakcie recovery) sesji. */
+export async function setNewPassword(password: string): Promise<void> {
+  const { error } = await getSupabase().auth.updateUser({ password });
   if (error) throw error;
 }
 
@@ -61,11 +87,24 @@ export async function signOut(): Promise<void> {
   }
 }
 
-/** Wypycha lokalne zmienione paczki do chmury. */
+/**
+ * Wypycha lokalne zmienione paczki do chmury — ale NIE nadpisuje nowszej wersji
+ * zdalnej o tej samej nazwie (ważne przy pierwszym logowaniu po jeździe „bez konta",
+ * gdy na innym urządzeniu jest już nowsza paczka). Starsze lokalne zostają „dirty”,
+ * a pullAll ściągnie nowszą wersję zdalną.
+ */
 export async function pushDirty(userId: string): Promise<number> {
   const dirty = (await listBundles()).filter((b) => b.dirty);
   if (!dirty.length) return 0;
-  const rows = dirty.map((b) => ({
+  // sprawdź zdalne updated_at dla tych nazw
+  const names = dirty.map((b) => b.name);
+  const { data: remote, error: rErr } = await getSupabase()
+    .from("routes").select("name, updated_at").in("name", names);
+  if (rErr) throw rErr;
+  const remoteAt = new Map<string, string>((remote ?? []).map((r) => [r.name as string, r.updated_at as string]));
+  const toPush = dirty.filter((b) => { const r = remoteAt.get(b.name); return !r || b.updated_at >= r; });
+  if (!toPush.length) return 0;
+  const rows = toPush.map((b) => ({
     user_id: userId,
     name: b.name,
     bundle: b.bundle as unknown,
@@ -74,8 +113,8 @@ export async function pushDirty(userId: string): Promise<number> {
   }));
   const { error } = await getSupabase().from("routes").upsert(rows, { onConflict: "user_id,name" });
   if (error) throw error;
-  for (const b of dirty) await putBundle({ ...b, dirty: false });
-  return dirty.length;
+  for (const b of toPush) await putBundle({ ...b, dirty: false });
+  return toPush.length;
 }
 
 /** Pobiera paczki z chmury i scala (nadpisuje lokalne, jeśli nowsze).

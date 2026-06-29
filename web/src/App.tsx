@@ -10,14 +10,15 @@ import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThr
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, setMeta, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
-import { getUser, signInWithPassword, signUpWithPassword, sendPasswordReset, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
-import { biometricSupported, biometricInfo, enableBiometric, disableBiometric, biometricUnlock, initBiometricTokenSync } from "./lib/biometric";
+import { getUser, getSessionEmail, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
+import { biometricSupported, biometricInfo, enableBiometric, disableBiometric, initBiometricTokenSync } from "./lib/biometric";
 import type { CatKey, DownRoute, FoodGap, Poi, Route, TripState } from "./lib/types";
 import { CAT_COLOR, is24h, fmtDist } from "./lib/ui";
 import { ElevationProfile } from "./components/ElevationProfile";
 import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/Sheets";
 import { useGps } from "./hooks/useGps";
 import { prewarmCorridor } from "./lib/prewarm";
+import { useI18n } from "./i18n";
 
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 const PMTILES_URL = import.meta.env.VITE_PMTILES_URL as string | undefined;
@@ -64,7 +65,8 @@ function rideAlert(title: string, body: string) {
   } catch { /* ignore */ }
 }
 
-export default function App() {
+export default function App({ localMode = false, onWantLogin }: { localMode?: boolean; onWantLogin?: () => void } = {}) {
+  const { t } = useI18n();
   const mapDiv = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -107,13 +109,10 @@ export default function App() {
   const [prewarming, setPrewarming] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; found: number } | null>(null);
   const fetchSessionRef = useRef<FetchSession | null>(null);
-  const [email, setEmail] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authErr, setAuthErr] = useState("");
   const [authMsg, setAuthMsg] = useState("");
-  const [pass, setPass] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [bioSupported, setBioSupported] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
   const { gpsOn, toggleGps } = useGps({
@@ -205,13 +204,14 @@ export default function App() {
     // Wznów ostatnią trasę po reloadzie (iOS lubi ubić kartę na długiej jeździe).
     getMeta("lastRoute").then((last) => { if (last) loadSaved(last); });
     if (!isSupabaseConfigured()) return;
-    getUser().then((u) => setUserEmail(u?.email ?? null));
+    getSessionEmail().then((mail) => setUserEmail(mail));
     refreshBio();
     const offBio = initBiometricTokenSync();
     // Po zalogowaniu auto-pobierz trasy z chmury do offline.
-    const off = onAuthChange(async (mail) => {
-      setUserEmail(mail);
-      if (!mail) return;
+    const off = onAuthChange(async (ev) => {
+      if (ev.type !== "session") return;
+      setUserEmail(ev.email);
+      if (!ev.email) return;
       try {
         const r = await syncNow();
         await refreshSaved();
@@ -448,46 +448,10 @@ export default function App() {
   function toggleCat(c: CatKey) {
     setActive((prev) => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
   }
-  function afterAuth() {
-    setPass(""); setEmail(""); setAuthErr(""); setAuthMsg(""); setMenuOpen(false);
-    setStatus("Zalogowano. Synchronizuję trasy…");
-    void doSync();
-    void refreshBio();
-  }
-  async function doAuth() {
-    if (!email || pass.length < 6 || authBusy) return;
-    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
-    try {
-      if (authMode === "register") {
-        const { needsConfirm } = await signUpWithPassword(email, pass);
-        if (needsConfirm) { setAuthMsg("Konto utworzone. Potwierdź adres e-mail linkiem z wiadomości, potem zaloguj się."); setAuthMode("login"); }
-        else afterAuth();
-      } else {
-        await signInWithPassword(email, pass);
-        afterAuth();
-      }
-    } catch (e: any) {
-      const m = String(e?.message || "");
-      setAuthErr(/invalid login/i.test(m) ? "Błędny e-mail lub hasło." : /already registered/i.test(m) ? "Konto z tym e-mailem już istnieje — zaloguj się." : /at least 6/i.test(m) ? "Hasło musi mieć min. 6 znaków." : (m || "Nie udało się."));
-    } finally { setAuthBusy(false); }
-  }
-  async function doReset() {
-    if (!email) { setAuthErr("Wpisz e-mail, na który wyślemy link do zmiany hasła."); return; }
-    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
-    try { await sendPasswordReset(email); setAuthMsg("Wysłaliśmy link do ustawienia nowego hasła na " + email + "."); }
-    catch (e: any) { setAuthErr(e?.message || "Nie udało się wysłać linku."); }
-    finally { setAuthBusy(false); }
-  }
   async function refreshBio() {
     const sup = await biometricSupported();
     setBioSupported(sup);
     setBioEnabled(sup ? (await biometricInfo()).enabled : false);
-  }
-  async function doBioUnlock() {
-    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
-    try { await biometricUnlock(); afterAuth(); }
-    catch (e: any) { setAuthErr(e?.message || "Nie udało się zalogować biometrią."); await refreshBio(); }
-    finally { setAuthBusy(false); }
   }
   async function doBioEnable() {
     setAuthBusy(true); setAuthErr(""); setAuthMsg("");
@@ -605,33 +569,6 @@ export default function App() {
   const guideStep = !route ? 1 : !pois.length ? 2 : 3;
   const savedEntry = saved.find((s) => s.name === name);
 
-  // Wspólny, inline flow: e-mail + hasło (rejestracja/logowanie) oraz biometria.
-  const loginBox = (
-    <div className="lbox">
-      {bioSupported && bioEnabled && (
-        <>
-          <button className="lgo bio" disabled={authBusy} onClick={doBioUnlock}>🔒 Zaloguj biometrią</button>
-          <div className="lor"><span>lub hasłem</span></div>
-        </>
-      )}
-      <input className="lin" type="email" inputMode="email" autoComplete="email" placeholder="e-mail"
-        value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doAuth(); }} />
-      <input className="lin" type="password" autoComplete={authMode === "register" ? "new-password" : "current-password"} placeholder="hasło (min. 6 znaków)"
-        value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doAuth(); }} />
-      <button className="lgo" disabled={!email || pass.length < 6 || authBusy} onClick={doAuth}>
-        {authBusy ? "Chwila…" : authMode === "register" ? "Załóż konto" : "Zaloguj się"}
-      </button>
-      <div className="lrow">
-        <button className="llink" onClick={() => { setAuthMode(authMode === "register" ? "login" : "register"); setAuthErr(""); setAuthMsg(""); }}>
-          {authMode === "register" ? "Mam już konto — zaloguj" : "Nie masz konta? Załóż"}
-        </button>
-        {authMode === "login" && <button className="llink" onClick={doReset}>Nie pamiętam hasła</button>}
-      </div>
-      {authMsg && <div className="lok">{authMsg}</div>}
-      {authErr && <div className="lerr">⚠ {authErr}</div>}
-    </div>
-  );
-
   return (
     <div className="layout">
       <header className="bar">
@@ -649,6 +586,9 @@ export default function App() {
             {(userEmail.trim()[0] || "?").toUpperCase()}
             <span className="avatar-dot" />
           </button>
+        )}
+        {isSupabaseConfigured() && !userEmail && localMode && onWantLogin && (
+          <button className="chip signin" onClick={onWantLogin}>👤 {t("local.sync")}</button>
         )}
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Planer</button>
@@ -764,15 +704,6 @@ export default function App() {
                   {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
                 </div>
               </div>
-              {isSupabaseConfigured() && !userEmail && (
-                <div className="gstep">
-                  <span className="gn">👤</span>
-                  <div>
-                    <b>Konto <span className="opt">— opcjonalnie</span></b><br /><small>Zaloguj się e-mailem, by mieć te same trasy na komputerze i w telefonie. Bez konta wszystko działa offline na tym urządzeniu.</small>
-                    {loginBox}
-                  </div>
-                </div>
-              )}
               {route && ds && <ElevationProfile ds={ds} totalKm={totalKm} cur={null} />}
               {pois.length > 0 && (
                 <ul className="list">
@@ -845,8 +776,8 @@ export default function App() {
               {authErr && <div className="lerr">⚠ {authErr}</div>}
               <button className="mbtn" onClick={() => { setUserEmail(null); setMenuSec(null); setMenuOpen(false); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
             </> : <>
-              <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Załóż konto e-mailem i hasłem, by mieć te same trasy na komputerze i w telefonie.</div>
-              {loginBox}
+              <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się lub załóż konto, by mieć te same trasy na komputerze i w telefonie.</div>
+              {onWantLogin && <button className="mbtn go" onClick={() => { setMenuOpen(false); onWantLogin(); }}>👤 Zaloguj / załóż konto</button>}
             </>}
           </div>}
         </>}
