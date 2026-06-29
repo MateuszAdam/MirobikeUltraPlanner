@@ -4,7 +4,10 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // Offline-first PWA. App-shell jest precache'owany; kafelki mapy (MapLibre/PMTiles
 // lub raster) cache'owane runtime ze strategią CacheFirst.
+const BUILD_STAMP = new Date().toISOString().slice(0, 16).replace("T", " ");
+
 export default defineConfig({
+  define: { __BUILD__: JSON.stringify(BUILD_STAMP) },
   build: {
     rollupOptions: {
       output: {
