@@ -735,7 +735,7 @@ export default function App() {
               <div className="mnote">{userEmail}</div>
               <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
               <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
-              <button className="mbtn" onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button>
+              <button className="mbtn" onClick={async () => { await signOut(); setUserEmail(null); setMenuSec(null); setMenuOpen(false); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); }}>Wyloguj</button>
             </> : linkSentTo ? <>
               <div className="mok">✉ Wysłaliśmy link logowania na <b>{linkSentTo}</b>.<br />Otwórz go <b>na tym urządzeniu</b> (sprawdź też spam) — wrócisz tu zalogowany.</div>
               <button className="mbtn" onClick={() => { setLinkSentTo(null); setAuthErr(""); }}>↩ Wyślij ponownie / inny e-mail</button>

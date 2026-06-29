@@ -40,7 +40,14 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
-  await getSupabase().auth.signOut();
+  // scope: "local" — czyści sesję na urządzeniu bez wymaganego round-tripu do
+  // serwera. Globalny signOut potrafi się odrzucić (offline / wygasła sesja),
+  // przez co UI by się nie zaktualizowało. Lokalny zawsze wylogowuje tu i teraz.
+  try {
+    await getSupabase().auth.signOut({ scope: "local" });
+  } catch {
+    /* nawet jeśli SDK rzuci — sesja lokalna i tak jest czyszczona */
+  }
 }
 
 /** Wypycha lokalne zmienione paczki do chmury. */
