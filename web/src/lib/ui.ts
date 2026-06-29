@@ -12,6 +12,21 @@ export function fmtDist(m: number): string {
   return Math.round(m) + " m";
 }
 
+/**
+ * Link do Booking zakotwiczony na LOKALIZACJI miejsca, nie na jego nazwie.
+ * Wcześniej `ss=<nazwa>` dla nieznanej/ogólnej nazwy noclegu powodował, że
+ * Booking pokazywał domyślne, promowane wyniki (np. hotele nad morzem).
+ * Teraz `ss` = miejscowość z OSM (albo współrzędne) + dokładne lat/lon, więc
+ * wyniki są w okolicy punktu na trasie.
+ */
+export function bookingUrl(p: { name: string; lat: number; lon: number; tags?: Record<string, string> }): string {
+  const t = p.tags ?? {};
+  const place = t["addr:city"] || t["addr:town"] || t["addr:village"] || t["addr:hamlet"] || t["addr:place"] || "";
+  const ss = place || `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
+  const q = new URLSearchParams({ ss, latitude: String(p.lat), longitude: String(p.lon) });
+  return `https://www.booking.com/searchresults.html?${q.toString()}`;
+}
+
 /** Czy miejsce jest czynne całodobowo (OSM opening_hours = 24/7). */
 export function is24h(t?: Record<string, string>): boolean {
   return !!t?.opening_hours && /24\s*\/\s*7/.test(t.opening_hours);

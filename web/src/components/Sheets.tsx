@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { pid } from "../lib/geo";
 import { etaAheadDelta, fmtDur } from "../lib/eta";
 import { CATS } from "../lib/categories";
-import { CAT_COLOR, is24h, defaultCfg, fmtDist } from "../lib/ui";
+import { CAT_COLOR, is24h, defaultCfg, fmtDist, bookingUrl } from "../lib/ui";
 import { MODES, planTrip, candidates, fmtClock } from "../lib/trip";
 import { DateTimePicker } from "./DateTimePicker";
 import type { DownRoute, Poi, TripState } from "../lib/types";
@@ -35,7 +35,7 @@ export function DetailSheet(props: {
         <div className="acts">
           <a className="act" target="_blank" rel="noopener" href={`https://www.google.com/maps/dir/?api=1&destination=${poi.lat}%2C${poi.lon}`}>🧭 Nawiguj</a>
           <a className="act" target="_blank" rel="noopener" href={`https://www.google.com/maps/search/?api=1&query=${poi.lat}%2C${poi.lon}`}>🗺 Mapy Google</a>
-          {poi.cats.includes("sleep") && <a className="act" target="_blank" rel="noopener" href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(poi.name)}`}>🛏 Booking</a>}
+          {poi.cats.includes("sleep") && <a className="act" target="_blank" rel="noopener" href={bookingUrl(poi)}>🛏 Booking</a>}
           {(t.phone || t["contact:phone"]) && <a className="act" href={`tel:${t.phone || t["contact:phone"]}`}>☎ Zadzwoń</a>}
           {(t.website || t["contact:website"]) && <a className="act" target="_blank" rel="noopener" href={t.website || t["contact:website"]}>🌐 Strona</a>}
         </div>
@@ -136,7 +136,7 @@ export function PlannerSheet(props: {
                         </select>
                         {d.sleep && <>
                           <button className="linkbtn" onClick={() => onOpenDetail(d.sleep!.poi)}>szczegóły</button>
-                          <a className="linkbtn" target="_blank" rel="noopener" href={`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(d.sleep.poi.name)}`}>Booking</a>
+                          <a className="linkbtn" target="_blank" rel="noopener" href={bookingUrl(d.sleep.poi)}>Booking</a>
                         </>}
                       </div>
                     )}

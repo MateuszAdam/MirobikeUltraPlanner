@@ -627,23 +627,23 @@ export default function App() {
             </>
           ) : (
             <div className="guide">
-              {!route && saved.length > 0 && (
-                <div className="omaps">
-                  <div className="omaps-h">🗺️ Twoje mapy offline<small>dotknij, by otworzyć</small></div>
-                  {saved.map((s) => (
-                    <button key={s.name} className="omap" onClick={() => loadSaved(s.name)}>
-                      <span className="omap-nm">{s.name}</span>
-                      <span className="omap-meta">{s.bundle.total_km.toFixed(0)} km · {s.bundle.pois.length} miejsc</span>
-                      <span className="omap-go">›</span>
-                    </button>
-                  ))}
-                  <div className="omaps-or">albo wczytaj nową trasę poniżej</div>
-                </div>
-              )}
               <div className={"gstep " + (route ? "done" : "active")}>
                 <span className="gn">{route ? "✓" : "1"}</span>
                 <div>
-                  <b>Trasa</b><br /><small>{route ? `${name} · ${totalKm.toFixed(0)} km` : "Wczytaj ślad GPX wyścigu."}</small>
+                  <b>Trasa</b><br /><small>{route ? `${name} · ${totalKm.toFixed(0)} km` : "Wybierz pobraną mapę albo wczytaj nowy ślad GPX."}</small>
+                  {!route && saved.length > 0 && (
+                    <div className="omaps">
+                      <div className="omaps-h">🗺️ Pobrane mapy offline<small>dotknij, by otworzyć</small></div>
+                      {saved.map((s) => (
+                        <button key={s.name} className="omap" onClick={() => loadSaved(s.name)}>
+                          <span className="omap-nm">{s.name}</span>
+                          <span className="omap-meta">{s.bundle.total_km.toFixed(0)} km · {s.bundle.pois.length} miejsc</span>
+                          <span className="omap-go">›</span>
+                        </button>
+                      ))}
+                      <div className="omaps-or">— albo wczytaj nową trasę —</div>
+                    </div>
+                  )}
                   <label className="gbtn"><input hidden type="file" accept=".gpx" onChange={(e) => e.target.files?.[0] && onGpx(e.target.files[0])} />{route ? "Zmień trasę (.gpx)" : "Wczytaj trasę (.gpx)"}</label>
                 </div>
               </div>
