@@ -50,6 +50,9 @@ export async function getMeta(key: string): Promise<string | undefined> {
 export async function setMeta(key: string, value: string): Promise<void> {
   await db.meta.put({ key, value });
 }
+export async function delMeta(key: string): Promise<void> {
+  await db.meta.delete(key);
+}
 
 /**
  * Prosi o trwałe przechowywanie — KLUCZOWE na iOS, gdzie dane bez „persisted"

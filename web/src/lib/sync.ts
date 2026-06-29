@@ -18,35 +18,36 @@ export async function getUser() {
   return data.user ?? null;
 }
 
-/** Nasłuch zmian sesji (np. powrót z magic-linka). Zwraca funkcję odpinającą. */
+/** Nasłuch zmian sesji. Zwraca funkcję odpinającą. */
 export function onAuthChange(cb: (email: string | null) => void): () => void {
   if (!isSupabaseConfigured()) return () => {};
   const { data } = getSupabase().auth.onAuthStateChange((_e, session) => cb(session?.user?.email ?? null));
   return () => data.subscription.unsubscribe();
 }
 
-export async function signInWithEmail(email: string): Promise<void> {
-  // Wysyła e-mail z linkiem ORAZ 6-cyfrowym kodem (szablon zawiera {{ .Token }}).
-  // Na iOS PWA link otwiera się w Safari (inny kontekst niż PWA), więc tam nie
-  // logujesz się w aplikacji — dlatego oferujemy też wpisanie kodu, który
-  // weryfikuje sesję bezpośrednio w kontekście PWA (verifyEmailCode).
-  await getSupabase().auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin },
-  });
-}
-
-/** Weryfikacja 6-cyfrowym kodem z maila — loguje w bieżącym kontekście (działa w PWA). */
-export async function verifyEmailCode(email: string, token: string): Promise<void> {
-  const { error } = await getSupabase().auth.verifyOtp({ email, token: token.trim(), type: "email" });
+/** Logowanie e-mailem i hasłem — bez przekierowań, działa w PWA na iOS. */
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  const { error } = await getSupabase().auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw error;
 }
 
-export async function signInWithGoogle(): Promise<void> {
-  await getSupabase().auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: window.location.origin },
+/**
+ * Rejestracja kontem e-mail + hasło. Przy wyłączonym „Confirm email" w Supabase
+ * od razu zwraca sesję (jesteś zalogowany bez klikania w link). Jeśli potwierdzanie
+ * jest włączone, `session` będzie null — wtedy trzeba potwierdzić e-mail.
+ */
+export async function signUpWithPassword(email: string, password: string): Promise<{ needsConfirm: boolean }> {
+  const { data, error } = await getSupabase().auth.signUp({ email: email.trim(), password });
+  if (error) throw error;
+  return { needsConfirm: !data.session };
+}
+
+/** Wysyła e-mail z linkiem do ustawienia nowego hasła. */
+export async function sendPasswordReset(email: string): Promise<void> {
+  const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: window.location.origin,
   });
+  if (error) throw error;
 }
 
 export async function signOut(): Promise<void> {

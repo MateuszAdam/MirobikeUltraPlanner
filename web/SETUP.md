@@ -20,40 +20,44 @@ Bez `.env.local` apka działa **lokalnie** (offline, bez kont) — mapa używa d
 ### 1. Supabase (konta + sync)
 1. Projekt na supabase.com (możesz użyć istniejącego).
 2. **SQL Editor** → wklej i uruchom `supabase/schema.sql` (tabela `routes` + RLS + `heartbeat`).
-3. **Authentication → Providers**: włącz **Email** (magic link). Opcjonalnie **Google** (OAuth).
+3. **Authentication → Providers → Email**: włącz **Email**. **Wyłącz „Confirm email"**
+   (Enable email confirmations = OFF). Dzięki temu rejestracja hasłem od razu loguje
+   w PWA — bez klikania linka w mailu (na iOS link otwiera Safari, czyli inny kontekst
+   niż PWA). To świadomy kompromis dla darmowej apki rowerowej.
+   - Logowanie odbywa się **e-mailem + hasłem** (oraz biometrią na urządzeniu — patrz niżej).
+     Magic-linki/OTP nie są używane.
 4. **Authentication → URL Configuration**: ustaw **Site URL** = `https://www.mirobike.grapevest.pl`
    i dodaj ten URL do **Redirect URLs** (plus `http://localhost:5173` na dev).
+   Potrzebne tylko dla linku **resetu hasła** (jedyny mailowy flow, który został).
 5. **Project Settings → API**: skopiuj `Project URL` i `anon public key`.
 
-### 1b. Ładny mail logowania (zamiast domyślnego „spamu")
-Domyślny mail Supabase jest po angielsku i od `…@supabase.io` (wygląda jak spam, ląduje w spamie).
-Popraw to w panelu:
+> **Biometria (Face ID / Touch ID / Windows Hello)** działa bez konfiguracji w Supabase.
+> Po pierwszym zalogowaniu hasłem w menu „Konto" pojawi się „🔒 Włącz logowanie biometrią".
+> Token sesji jest wtedy trzymany lokalnie (IndexedDB) za bramką WebAuthn urządzenia
+> i rotowany przy odświeżaniu. Wymaga HTTPS (prod) lub localhost.
 
-**A) Polski szablon** — Authentication → **Email Templates → Magic Link**:
-- **Subject:** `Twój kod / link logowania do MiroBike`
+### 1b. Mail resetu hasła (jedyny mailowy flow) + dostarczalność
+Logowanie jest hasłem/biometrią, więc jedyny mail, jaki wysyła apka, to **reset hasła**.
+Warto go spolszczyć i poprawić nadawcę (domyślny `…@supabase.io` ląduje w spamie).
+
+**A) Polski szablon** — Authentication → **Email Templates → Reset Password**:
+- **Subject:** `Zmiana hasła w MiroBike`
 - **Message (HTML):**
 ```html
 <div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#14161b">
   <h2 style="margin:0 0 6px">🚴 MiroBike Ultra Planner</h2>
-  <p style="font-size:15px;line-height:1.5">Cześć! Aby zalogować się do MiroBike, wpisz w aplikacji ten kod:</p>
-  <p style="text-align:center;margin:18px 0">
-    <span style="display:inline-block;font-size:30px;font-weight:800;letter-spacing:8px;background:#f1f5f4;color:#04201e;padding:14px 22px;border-radius:12px">{{ .Token }}</span>
+  <p style="font-size:15px;line-height:1.5">Kliknij przycisk, aby ustawić nowe hasło do swojego konta:</p>
+  <p style="text-align:center;margin:22px 0">
+    <a href="{{ .ConfirmationURL }}" style="background:#19e0d6;color:#04201e;font-weight:700;text-decoration:none;padding:14px 26px;border-radius:10px;display:inline-block">Ustaw nowe hasło</a>
   </p>
-  <p style="font-size:14px;line-height:1.5;text-align:center;color:#667">albo kliknij przycisk (na tym samym urządzeniu):</p>
-  <p style="text-align:center;margin:14px 0 22px">
-    <a href="{{ .ConfirmationURL }}" style="background:#19e0d6;color:#04201e;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:10px;display:inline-block">Zaloguj się</a>
-  </p>
-  <p style="font-size:13px;color:#667">Kod/link działa krótko i tylko raz. Jeśli to nie Ty prosiłeś o logowanie — zignoruj tę wiadomość.</p>
+  <p style="font-size:13px;color:#667">Jeśli to nie Ty prosiłeś o zmianę hasła — zignoruj tę wiadomość.</p>
   <p style="font-size:13px;color:#667">Rowerowych kilometrów!<br>— MiroBike · mirobike.grapevest.pl</p>
 </div>
 ```
-> **Ważne:** `{{ .Token }}` to 6-cyfrowy kod. Aplikacja na iOS w trybie PWA loguje się **kodem** (link otwiera się w Safari, czyli w innym kontekście niż PWA — tam byś nie był zalogowany w aplikacji). Dlatego szablon musi zawierać `{{ .Token }}`.
 
-(zrób to samo dla „Confirm signup" — dodaj `{{ .Token }}`; pozostałe szablony możesz zostawić.)
-
-**B) Ładny nadawca + dostarczalność (mocno zalecane)** — Project Settings → Authentication → **SMTP Settings** → włącz **Custom SMTP**. Użyj darmowego dostawcy (np. **Resend** ~3000 maili/mc albo Brevo), zweryfikuj domenę `grapevest.pl` (SPF/DKIM) i ustaw:
+**B) Ładny nadawca + dostarczalność (zalecane)** — Project Settings → Authentication → **SMTP Settings** → włącz **Custom SMTP**. Użyj darmowego dostawcy (np. **Resend** ~3000 maili/mc albo Brevo), zweryfikuj domenę `grapevest.pl` (SPF/DKIM) i ustaw:
 - **Sender name:** `MiroBike`
-- **Sender email:** `noreply@grapevest.pl` (albo `logowanie@grapevest.pl`)
+- **Sender email:** `noreply@grapevest.pl` (albo `konto@grapevest.pl`)
 
 Bez custom SMTP maile idą z `…@supabase.io`, częściej trafiają do spamu i są limitowane.
 

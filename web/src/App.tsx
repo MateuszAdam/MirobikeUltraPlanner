@@ -10,7 +10,8 @@ import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThr
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, setMeta, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
-import { getUser, signInWithEmail, verifyEmailCode, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
+import { getUser, signInWithPassword, signUpWithPassword, sendPasswordReset, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
+import { biometricSupported, biometricInfo, enableBiometric, disableBiometric, biometricUnlock, initBiometricTokenSync } from "./lib/biometric";
 import type { CatKey, DownRoute, FoodGap, Poi, Route, TripState } from "./lib/types";
 import { CAT_COLOR, is24h, fmtDist } from "./lib/ui";
 import { ElevationProfile } from "./components/ElevationProfile";
@@ -109,9 +110,12 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
-  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [authErr, setAuthErr] = useState("");
-  const [code, setCode] = useState("");
+  const [authMsg, setAuthMsg] = useState("");
+  const [pass, setPass] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
   const { gpsOn, toggleGps } = useGps({
     onFix: (lat, lon, acc) => setHere(lat, lon, true, acc),
     canTrack: () => !!route,
@@ -202,7 +206,9 @@ export default function App() {
     getMeta("lastRoute").then((last) => { if (last) loadSaved(last); });
     if (!isSupabaseConfigured()) return;
     getUser().then((u) => setUserEmail(u?.email ?? null));
-    // Po zalogowaniu (też powrót z magic-linka) auto-pobierz trasy z chmury do offline.
+    refreshBio();
+    const offBio = initBiometricTokenSync();
+    // Po zalogowaniu auto-pobierz trasy z chmury do offline.
     const off = onAuthChange(async (mail) => {
       setUserEmail(mail);
       if (!mail) return;
@@ -213,7 +219,8 @@ export default function App() {
         else setStatus("Zalogowano. Trasy zsynchronizowane.");
       } catch { /* offline — zsynchronizuje się później */ }
     });
-    return off;
+    return () => { off(); offBio(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSaved]);
 
   // Lekki zrzut stanu jazdy (km + progi alertów) do IndexedDB — przetrwa reload na trasie.
@@ -441,24 +448,55 @@ export default function App() {
   function toggleCat(c: CatKey) {
     setActive((prev) => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
   }
-  async function login() {
-    if (!email || authBusy) return;
-    setAuthBusy(true); setAuthErr(""); setLinkSentTo(null); setCode("");
-    try { await signInWithEmail(email); setLinkSentTo(email); }
-    catch (e: any) { setAuthErr(e.message || "nie udało się wysłać kodu"); }
+  function afterAuth() {
+    setPass(""); setEmail(""); setAuthErr(""); setAuthMsg(""); setMenuOpen(false);
+    setStatus("Zalogowano. Synchronizuję trasy…");
+    void doSync();
+    void refreshBio();
+  }
+  async function doAuth() {
+    if (!email || pass.length < 6 || authBusy) return;
+    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
+    try {
+      if (authMode === "register") {
+        const { needsConfirm } = await signUpWithPassword(email, pass);
+        if (needsConfirm) { setAuthMsg("Konto utworzone. Potwierdź adres e-mail linkiem z wiadomości, potem zaloguj się."); setAuthMode("login"); }
+        else afterAuth();
+      } else {
+        await signInWithPassword(email, pass);
+        afterAuth();
+      }
+    } catch (e: any) {
+      const m = String(e?.message || "");
+      setAuthErr(/invalid login/i.test(m) ? "Błędny e-mail lub hasło." : /already registered/i.test(m) ? "Konto z tym e-mailem już istnieje — zaloguj się." : /at least 6/i.test(m) ? "Hasło musi mieć min. 6 znaków." : (m || "Nie udało się."));
+    } finally { setAuthBusy(false); }
+  }
+  async function doReset() {
+    if (!email) { setAuthErr("Wpisz e-mail, na który wyślemy link do zmiany hasła."); return; }
+    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
+    try { await sendPasswordReset(email); setAuthMsg("Wysłaliśmy link do ustawienia nowego hasła na " + email + "."); }
+    catch (e: any) { setAuthErr(e?.message || "Nie udało się wysłać linku."); }
     finally { setAuthBusy(false); }
   }
-  async function verifyCode() {
-    if (code.trim().length < 6 || !linkSentTo || authBusy) return;
-    setAuthBusy(true); setAuthErr("");
-    try {
-      await verifyEmailCode(linkSentTo, code);
-      // onAuthChange ustawi userEmail; sprzątamy lokalny stan logowania
-      setLinkSentTo(null); setCode(""); setEmail(""); setMenuOpen(false);
-      setStatus("Zalogowano. Synchronizuję trasy…");
-      void doSync();
-    } catch (e: any) { setAuthErr(e.message || "błędny lub wygasły kod"); }
+  async function refreshBio() {
+    const sup = await biometricSupported();
+    setBioSupported(sup);
+    setBioEnabled(sup ? (await biometricInfo()).enabled : false);
+  }
+  async function doBioUnlock() {
+    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
+    try { await biometricUnlock(); afterAuth(); }
+    catch (e: any) { setAuthErr(e?.message || "Nie udało się zalogować biometrią."); await refreshBio(); }
     finally { setAuthBusy(false); }
+  }
+  async function doBioEnable() {
+    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
+    try { await enableBiometric(); setBioEnabled(true); setAuthMsg("Biometria włączona — następnym razem zalogujesz się odciskiem/twarzą."); }
+    catch (e: any) { setAuthErr(e?.message || "Nie udało się włączyć biometrii."); }
+    finally { setAuthBusy(false); }
+  }
+  async function doBioDisable() {
+    await disableBiometric(); setBioEnabled(false); setAuthMsg("Biometria wyłączona na tym urządzeniu.");
   }
   async function doSync() {
     try {
@@ -567,23 +605,30 @@ export default function App() {
   const guideStep = !route ? 1 : !pois.length ? 2 : 3;
   const savedEntry = saved.find((s) => s.name === name);
 
-  // Wspólny, inline flow logowania (e-mail → kod). Bez przechodzenia gdzie indziej.
-  const loginBox = linkSentTo ? (
+  // Wspólny, inline flow: e-mail + hasło (rejestracja/logowanie) oraz biometria.
+  const loginBox = (
     <div className="lbox">
-      <div className="lok">✉ Wysłaliśmy e-mail na <b>{linkSentTo}</b>.<br />Wpisz <b>6-cyfrowy kod</b> z wiadomości:</div>
-      <input className="lin code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="• • • • • •"
-        value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-        onKeyDown={(e) => { if (e.key === "Enter") verifyCode(); }} />
-      <button className="lgo" disabled={code.trim().length < 6 || authBusy} onClick={verifyCode}>{authBusy ? "Sprawdzam…" : "Zaloguj kodem"}</button>
-      <button className="llink" onClick={() => { setLinkSentTo(null); setCode(""); setAuthErr(""); }}>↩ Inny e-mail / wyślij ponownie</button>
+      {bioSupported && bioEnabled && (
+        <>
+          <button className="lgo bio" disabled={authBusy} onClick={doBioUnlock}>🔒 Zaloguj biometrią</button>
+          <div className="lor"><span>lub hasłem</span></div>
+        </>
+      )}
+      <input className="lin" type="email" inputMode="email" autoComplete="email" placeholder="e-mail"
+        value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doAuth(); }} />
+      <input className="lin" type="password" autoComplete={authMode === "register" ? "new-password" : "current-password"} placeholder="hasło (min. 6 znaków)"
+        value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") doAuth(); }} />
+      <button className="lgo" disabled={!email || pass.length < 6 || authBusy} onClick={doAuth}>
+        {authBusy ? "Chwila…" : authMode === "register" ? "Załóż konto" : "Zaloguj się"}
+      </button>
+      <div className="lrow">
+        <button className="llink" onClick={() => { setAuthMode(authMode === "register" ? "login" : "register"); setAuthErr(""); setAuthMsg(""); }}>
+          {authMode === "register" ? "Mam już konto — zaloguj" : "Nie masz konta? Załóż"}
+        </button>
+        {authMode === "login" && <button className="llink" onClick={doReset}>Nie pamiętam hasła</button>}
+      </div>
+      {authMsg && <div className="lok">{authMsg}</div>}
       {authErr && <div className="lerr">⚠ {authErr}</div>}
-    </div>
-  ) : (
-    <div className="lbox">
-      <input className="lin" type="email" inputMode="email" autoComplete="email" placeholder="twój e-mail"
-        value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") login(); }} />
-      <button className="lgo" disabled={!email || authBusy} onClick={login}>{authBusy ? "Wysyłam…" : "✉ Wyślij kod logowania"}</button>
-      {authErr && <div className="lerr">⚠ Nie udało się: {authErr}</div>}
     </div>
   );
 
@@ -791,11 +836,16 @@ export default function App() {
           {menuSec === "account" && <div className="msecbody">
             {userEmail ? <>
               <div className="mnote">{userEmail}</div>
-              <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
+              <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym kontem — pobiorą się automatycznie do pamięci offline.</div>
               <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
+              {bioSupported && (bioEnabled
+                ? <button className="mbtn" onClick={doBioDisable}>🔒 Wyłącz logowanie biometrią</button>
+                : <button className="mbtn" onClick={doBioEnable} disabled={authBusy}>🔒 Włącz logowanie biometrią</button>)}
+              {authMsg && <div className="lok">{authMsg}</div>}
+              {authErr && <div className="lerr">⚠ {authErr}</div>}
               <button className="mbtn" onClick={() => { setUserEmail(null); setMenuSec(null); setMenuOpen(false); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
             </> : <>
-              {!linkSentTo && <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła) — dostaniesz kod, który tu wpiszesz.</div>}
+              <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Załóż konto e-mailem i hasłem, by mieć te same trasy na komputerze i w telefonie.</div>
               {loginBox}
             </>}
           </div>}

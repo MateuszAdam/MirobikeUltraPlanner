@@ -148,7 +148,11 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .lin.code { text-align: center; letter-spacing: .35em; font-weight: 800; font-size: 22px; padding-left: .35em; }
 .lgo { background: var(--route); color: #04201e; border: none; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 800; cursor: pointer; }
 .lgo:disabled { opacity: .45; }
-.llink { background: none; border: none; color: var(--route); font-size: 13px; cursor: pointer; padding: 4px; text-align: center; }
+.lgo.bio { background: #2a2f3a; color: var(--txt); border: 1px solid var(--route); }
+.lrow { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.llink { background: none; border: none; color: var(--route); font-size: 13px; cursor: pointer; padding: 4px 0; text-align: left; }
+.lor { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: 12px; margin: 2px 0; }
+.lor::before, .lor::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .lok { font-size: 13px; line-height: 1.45; color: #cdeede; background: #13311f; border: 1px solid #1d5236; border-radius: 10px; padding: 10px 12px; }
 .lerr { font-size: 13px; color: #ffb4b4; font-weight: 600; }
 
