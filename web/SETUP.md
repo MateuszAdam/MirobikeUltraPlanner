@@ -25,6 +25,32 @@ Bez `.env.local` apka działa **lokalnie** (offline, bez kont) — mapa używa d
    i dodaj ten URL do **Redirect URLs** (plus `http://localhost:5173` na dev).
 5. **Project Settings → API**: skopiuj `Project URL` i `anon public key`.
 
+### 1b. Ładny mail logowania (zamiast domyślnego „spamu")
+Domyślny mail Supabase jest po angielsku i od `…@supabase.io` (wygląda jak spam, ląduje w spamie).
+Popraw to w panelu:
+
+**A) Polski szablon** — Authentication → **Email Templates → Magic Link**:
+- **Subject:** `Twój link logowania do MiroBike`
+- **Message (HTML):**
+```html
+<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#14161b">
+  <h2 style="margin:0 0 6px">🚴 MiroBike Ultra Planner</h2>
+  <p style="font-size:15px;line-height:1.5">Cześć! Kliknij przycisk, aby zalogować się do MiroBike i mieć swoje trasy offline na każdym urządzeniu:</p>
+  <p style="text-align:center;margin:22px 0">
+    <a href="{{ .ConfirmationURL }}" style="background:#19e0d6;color:#04201e;font-weight:700;text-decoration:none;padding:14px 26px;border-radius:10px;display:inline-block">Zaloguj się</a>
+  </p>
+  <p style="font-size:13px;color:#667">Link działa krótko i tylko raz. Jeśli to nie Ty prosiłeś o logowanie — zignoruj tę wiadomość.</p>
+  <p style="font-size:13px;color:#667">Rowerowych kilometrów!<br>— MiroBike · mirobike.grapevest.pl</p>
+</div>
+```
+(zrób to samo dla „Confirm signup" jeśli używasz; pozostałe szablony możesz zostawić.)
+
+**B) Ładny nadawca + dostarczalność (mocno zalecane)** — Project Settings → Authentication → **SMTP Settings** → włącz **Custom SMTP**. Użyj darmowego dostawcy (np. **Resend** ~3000 maili/mc albo Brevo), zweryfikuj domenę `grapevest.pl` (SPF/DKIM) i ustaw:
+- **Sender name:** `MiroBike`
+- **Sender email:** `noreply@grapevest.pl` (albo `logowanie@grapevest.pl`)
+
+Bez custom SMTP maile idą z `…@supabase.io`, częściej trafiają do spamu i są limitowane.
+
 ### 2. Zmienne środowiskowe
 W `web/.env.local` (dev) oraz w Vercel (prod → Settings → Environment Variables):
 ```
