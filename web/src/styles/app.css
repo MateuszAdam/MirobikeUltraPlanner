@@ -145,7 +145,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .menu.open { transform: none; }
 .mhead { display: flex; justify-content: space-between; align-items: center; }
 .mhead b { font-size: 16px; }
-.msec { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 8px 0 -2px; }
+.msec { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 12px 0 8px; }
 .mbtn { width: 100%; text-align: center; background: #232732; border: 1px solid var(--line); color: var(--txt); border-radius: 10px; padding: 14px; font-size: 15px; cursor: pointer; }
 .mbtn.go { background: var(--route); color: #04201e; border-color: transparent; font-weight: 700; }
 .msecbtn { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #232732; border: 1px solid var(--line); color: var(--txt); border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; }

@@ -548,7 +548,7 @@ export default function App() {
           </button>
         )}
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
-        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
+        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Planer</button>
       </header>
 
       <div className="quick">
