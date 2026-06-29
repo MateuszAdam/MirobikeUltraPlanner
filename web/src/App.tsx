@@ -10,7 +10,7 @@ import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThr
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, setMeta, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
-import { getUser, signInWithEmail, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
+import { getUser, signInWithEmail, verifyEmailCode, signOut, syncNow, pushDirty, onAuthChange } from "./lib/sync";
 import type { CatKey, DownRoute, FoodGap, Poi, Route, TripState } from "./lib/types";
 import { CAT_COLOR, is24h, fmtDist } from "./lib/ui";
 import { ElevationProfile } from "./components/ElevationProfile";
@@ -41,7 +41,7 @@ function circlePolygon(lat: number, lon: number, radiusM: number): GeoJSON.Featu
 
 // Wymusza warstwy nakładki nad podkładem (wektorowy PMTiles potrafi je „zakopać").
 function bumpOverlays(m: maplibregl.Map) {
-  for (const id of ["mb_route_case", "mb_route", "mb_acc", "mb_km", "mb_here", "mb_pois"]) if (m.getLayer(id)) m.moveLayer(id);
+  for (const id of ["mb_route_case", "mb_route", "mb_acc", "mb_km", "mb_pois", "mb_ends", "mb_ends_lbl", "mb_here"]) if (m.getLayer(id)) m.moveLayer(id);
 }
 
 let audioCtx: AudioContext | null = null;
@@ -111,6 +111,7 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [authErr, setAuthErr] = useState("");
+  const [code, setCode] = useState("");
   const { gpsOn, toggleGps } = useGps({
     onFix: (lat, lon, acc) => setHere(lat, lon, true, acc),
     canTrack: () => !!route,
@@ -167,6 +168,19 @@ export default function App() {
       m.on("click", "mb_pois", (e) => {
         const id = e.features?.[0]?.properties?.id as string | undefined;
         if (id) setDetail(pidIndexRef.current.get(id) ?? null);
+      });
+      // Start / Meta — kropki + etykiety
+      m.addSource("mb_ends", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addLayer({
+        id: "mb_ends", type: "circle", source: "mb_ends",
+        paint: { "circle-radius": 7, "circle-stroke-width": 3, "circle-stroke-color": "#ffffff",
+          "circle-color": ["match", ["get", "kind"], "start", "#23c552", "finish", "#ff4d4d", "#23c552"] },
+      });
+      m.addLayer({
+        id: "mb_ends_lbl", type: "symbol", source: "mb_ends",
+        layout: { "text-field": ["get", "label"], "text-size": 12, "text-offset": [0, -1.4], "text-anchor": "bottom",
+          "text-font": ["Noto Sans Regular"], "text-allow-overlap": true },
+        paint: { "text-color": "#ffffff", "text-halo-color": "#0c0d10", "text-halo-width": 2 },
       });
       m.on("click", "mb_km", (e) => {
         const c = (e.features?.[0]?.geometry as GeoJSON.Point)?.coordinates;
@@ -235,16 +249,28 @@ export default function App() {
     if (!ready || !m) return;
     const rsrc = m.getSource("mb_route") as maplibregl.GeoJSONSource | undefined;
     const ksrc = m.getSource("mb_km") as maplibregl.GeoJSONSource | undefined;
+    const esrc = m.getSource("mb_ends") as maplibregl.GeoJSONSource | undefined;
     if (route && ds) {
       const coords = route.pts.map((p) => [p.lon, p.lat]);
       rsrc?.setData({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } });
       ksrc?.setData({ type: "FeatureCollection", features: kmMarkerFeatures(ds, totalKm) });
+      const a = route.pts[0], b = route.pts[route.pts.length - 1];
+      const loop = Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
+      esrc?.setData({
+        type: "FeatureCollection", features: loop
+          ? [{ type: "Feature", properties: { kind: "start", label: "START / META" }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } }]
+          : [
+              { type: "Feature", properties: { kind: "start", label: "START" }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } },
+              { type: "Feature", properties: { kind: "finish", label: "META" }, geometry: { type: "Point", coordinates: [b.lon, b.lat] } },
+            ],
+      });
       const lons = coords.map((c) => c[0]);
       const lats = coords.map((c) => c[1]);
       m.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 40, duration: 0 });
     } else {
       rsrc?.setData({ type: "FeatureCollection", features: [] });
       ksrc?.setData({ type: "FeatureCollection", features: [] });
+      esrc?.setData({ type: "FeatureCollection", features: [] });
     }
     bumpOverlays(m);
   }, [route, ds, totalKm, ready]);
@@ -417,9 +443,21 @@ export default function App() {
   }
   async function login() {
     if (!email || authBusy) return;
-    setAuthBusy(true); setAuthErr(""); setLinkSentTo(null);
+    setAuthBusy(true); setAuthErr(""); setLinkSentTo(null); setCode("");
     try { await signInWithEmail(email); setLinkSentTo(email); }
-    catch (e: any) { setAuthErr(e.message || "nie udało się wysłać linku"); }
+    catch (e: any) { setAuthErr(e.message || "nie udało się wysłać kodu"); }
+    finally { setAuthBusy(false); }
+  }
+  async function verifyCode() {
+    if (code.trim().length < 6 || !linkSentTo || authBusy) return;
+    setAuthBusy(true); setAuthErr("");
+    try {
+      await verifyEmailCode(linkSentTo, code);
+      // onAuthChange ustawi userEmail; sprzątamy lokalny stan logowania
+      setLinkSentTo(null); setCode(""); setEmail(""); setMenuOpen(false);
+      setStatus("Zalogowano. Synchronizuję trasy…");
+      void doSync();
+    } catch (e: any) { setAuthErr(e.message || "błędny lub wygasły kod"); }
     finally { setAuthBusy(false); }
   }
   async function doSync() {
@@ -528,6 +566,26 @@ export default function App() {
 
   const guideStep = !route ? 1 : !pois.length ? 2 : 3;
   const savedEntry = saved.find((s) => s.name === name);
+
+  // Wspólny, inline flow logowania (e-mail → kod). Bez przechodzenia gdzie indziej.
+  const loginBox = linkSentTo ? (
+    <div className="lbox">
+      <div className="lok">✉ Wysłaliśmy e-mail na <b>{linkSentTo}</b>.<br />Wpisz <b>6-cyfrowy kod</b> z wiadomości:</div>
+      <input className="lin code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="• • • • • •"
+        value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        onKeyDown={(e) => { if (e.key === "Enter") verifyCode(); }} />
+      <button className="lgo" disabled={code.trim().length < 6 || authBusy} onClick={verifyCode}>{authBusy ? "Sprawdzam…" : "Zaloguj kodem"}</button>
+      <button className="llink" onClick={() => { setLinkSentTo(null); setCode(""); setAuthErr(""); }}>↩ Inny e-mail / wyślij ponownie</button>
+      {authErr && <div className="lerr">⚠ {authErr}</div>}
+    </div>
+  ) : (
+    <div className="lbox">
+      <input className="lin" type="email" inputMode="email" autoComplete="email" placeholder="twój e-mail"
+        value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") login(); }} />
+      <button className="lgo" disabled={!email || authBusy} onClick={login}>{authBusy ? "Wysyłam…" : "✉ Wyślij kod logowania"}</button>
+      {authErr && <div className="lerr">⚠ Nie udało się: {authErr}</div>}
+    </div>
+  );
 
   return (
     <div className="layout">
@@ -665,8 +723,8 @@ export default function App() {
                 <div className="gstep">
                   <span className="gn">👤</span>
                   <div>
-                    <b>Konto (opcjonalnie)</b><br /><small>Zaloguj się, by przygotować trasy na komputerze i mieć je <b>offline na telefonie</b>.</small>
-                    <button className="gbtn" onClick={() => { setMenuSec("account"); setMenuOpen(true); }}>👤 Zaloguj się</button>
+                    <b>Konto <span className="opt">— opcjonalnie</span></b><br /><small>Zaloguj się e-mailem, by mieć te same trasy na komputerze i w telefonie. Bez konta wszystko działa offline na tym urządzeniu.</small>
+                    {loginBox}
                   </div>
                 </div>
               )}
@@ -736,14 +794,9 @@ export default function App() {
               <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
               <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
               <button className="mbtn" onClick={() => { setUserEmail(null); setMenuSec(null); setMenuOpen(false); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
-            </> : linkSentTo ? <>
-              <div className="mok">✉ Wysłaliśmy link logowania na <b>{linkSentTo}</b>.<br />Otwórz go <b>na tym urządzeniu</b> (sprawdź też spam) — wrócisz tu zalogowany.</div>
-              <button className="mbtn" onClick={() => { setLinkSentTo(null); setAuthErr(""); }}>↩ Wyślij ponownie / inny e-mail</button>
             </> : <>
-              <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła — dostajesz link), by przygotować trasy na komputerze i mieć je offline na telefonie.</div>
-              <input className="mbtn" type="email" placeholder="twój e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <button className="mbtn go" disabled={!email || authBusy} onClick={login}>{authBusy ? "Wysyłam…" : "✉ Wyślij link logowania"}</button>
-              {authErr && <div className="merr">⚠ Nie udało się: {authErr}</div>}
+              {!linkSentTo && <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła) — dostaniesz kod, który tu wpiszesz.</div>}
+              {loginBox}
             </>}
           </div>}
         </>}

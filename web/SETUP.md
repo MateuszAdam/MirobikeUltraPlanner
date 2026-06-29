@@ -30,20 +30,26 @@ Domyślny mail Supabase jest po angielsku i od `…@supabase.io` (wygląda jak s
 Popraw to w panelu:
 
 **A) Polski szablon** — Authentication → **Email Templates → Magic Link**:
-- **Subject:** `Twój link logowania do MiroBike`
+- **Subject:** `Twój kod / link logowania do MiroBike`
 - **Message (HTML):**
 ```html
 <div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#14161b">
   <h2 style="margin:0 0 6px">🚴 MiroBike Ultra Planner</h2>
-  <p style="font-size:15px;line-height:1.5">Cześć! Kliknij przycisk, aby zalogować się do MiroBike i mieć swoje trasy offline na każdym urządzeniu:</p>
-  <p style="text-align:center;margin:22px 0">
-    <a href="{{ .ConfirmationURL }}" style="background:#19e0d6;color:#04201e;font-weight:700;text-decoration:none;padding:14px 26px;border-radius:10px;display:inline-block">Zaloguj się</a>
+  <p style="font-size:15px;line-height:1.5">Cześć! Aby zalogować się do MiroBike, wpisz w aplikacji ten kod:</p>
+  <p style="text-align:center;margin:18px 0">
+    <span style="display:inline-block;font-size:30px;font-weight:800;letter-spacing:8px;background:#f1f5f4;color:#04201e;padding:14px 22px;border-radius:12px">{{ .Token }}</span>
   </p>
-  <p style="font-size:13px;color:#667">Link działa krótko i tylko raz. Jeśli to nie Ty prosiłeś o logowanie — zignoruj tę wiadomość.</p>
+  <p style="font-size:14px;line-height:1.5;text-align:center;color:#667">albo kliknij przycisk (na tym samym urządzeniu):</p>
+  <p style="text-align:center;margin:14px 0 22px">
+    <a href="{{ .ConfirmationURL }}" style="background:#19e0d6;color:#04201e;font-weight:700;text-decoration:none;padding:13px 26px;border-radius:10px;display:inline-block">Zaloguj się</a>
+  </p>
+  <p style="font-size:13px;color:#667">Kod/link działa krótko i tylko raz. Jeśli to nie Ty prosiłeś o logowanie — zignoruj tę wiadomość.</p>
   <p style="font-size:13px;color:#667">Rowerowych kilometrów!<br>— MiroBike · mirobike.grapevest.pl</p>
 </div>
 ```
-(zrób to samo dla „Confirm signup" jeśli używasz; pozostałe szablony możesz zostawić.)
+> **Ważne:** `{{ .Token }}` to 6-cyfrowy kod. Aplikacja na iOS w trybie PWA loguje się **kodem** (link otwiera się w Safari, czyli w innym kontekście niż PWA — tam byś nie był zalogowany w aplikacji). Dlatego szablon musi zawierać `{{ .Token }}`.
+
+(zrób to samo dla „Confirm signup" — dodaj `{{ .Token }}`; pozostałe szablony możesz zostawić.)
 
 **B) Ładny nadawca + dostarczalność (mocno zalecane)** — Project Settings → Authentication → **SMTP Settings** → włącz **Custom SMTP**. Użyj darmowego dostawcy (np. **Resend** ~3000 maili/mc albo Brevo), zweryfikuj domenę `grapevest.pl` (SPF/DKIM) i ustaw:
 - **Sender name:** `MiroBike`
