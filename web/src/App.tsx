@@ -94,6 +94,7 @@ export default function App() {
   const [showPlan, setShowPlan] = useState(false);
   const [trip, setTrip] = useState<TripState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuSec, setMenuSec] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [mapView, setMapView] = useState<"list" | "map">("list");
@@ -539,7 +540,7 @@ export default function App() {
         )}
         {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
-        <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => setFavOnly((v) => !v)}>★</button>
+        <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
       </header>
 
@@ -670,57 +671,56 @@ export default function App() {
       <div className={"menu " + (menuOpen ? "open" : "")}>
         <div className="mhead"><b>Menu</b><button className="iconbtn" onClick={() => setMenuOpen(false)}>✕</button></div>
 
-        <div className="msec">Trasa</div>
-        <label className="mbtn"><input hidden type="file" accept=".gpx" onChange={(e) => { if (e.target.files?.[0]) { onGpx(e.target.files[0]); setMenuOpen(false); } }} />📂 Wczytaj trasę (.gpx)</label>
-
-        <div className="msec">Miejsca</div>
-        <label className="mrow">Promień szukania (sklepy/jedzenie/paliwo)
-          <select value={fetchRadius} onChange={(e) => setFetchRadius(+e.target.value)}>
-            <option value={100}>100 m</option><option value={300}>300 m</option><option value={500}>500 m</option>
-            <option value={1000}>1 km</option><option value={2000}>2 km</option>
+        <button className="msecbtn" onClick={() => setMenuSec(menuSec === "route" ? null : "route")}>
+          <span>🧭 Trasa i miejsca</span><span className="chev">{menuSec === "route" ? "▾" : "▸"}</span>
+        </button>
+        {menuSec === "route" && <div className="msecbody">
+          <label className="mbtn"><input hidden type="file" accept=".gpx" onChange={(e) => { if (e.target.files?.[0]) { onGpx(e.target.files[0]); setMenuOpen(false); } }} />📂 Wczytaj trasę (.gpx)</label>
+          <label className="mrow">Promień szukania (sklepy/jedzenie/paliwo)
+            <select value={fetchRadius} onChange={(e) => setFetchRadius(+e.target.value)}>
+              <option value={100}>100 m</option><option value={300}>300 m</option><option value={500}>500 m</option>
+              <option value={1000}>1 km</option><option value={2000}>2 km</option>
+            </select>
+          </label>
+          <div className="mhelp">Noclegi szukane zawsze do 5 km. Po zmianie kliknij „Pobierz miejsca".</div>
+          <button className="mbtn go" disabled={!route || fetching} onClick={() => { doFetch(); setMenuOpen(false); }}>{fetching ? "Pobieram…" : "⬇ Pobierz miejsca"}</button>
+          {savedEntry && <div className="mnote">💾 Zapisane offline ({savedEntry.bundle.pois.length} miejsc){savedEntry.dirty ? " · do wysłania" : userEmail ? " · w chmurze" : ""}</div>}
+          {PMTILES_URL && <button className="mbtn" disabled={!route || prewarming} onClick={doPrewarm}>{prewarming ? "Pobieram mapę…" : "🗺 Pobierz mapę offline (dla trasy)"}</button>}
+          <select className="mbtn" value="" onChange={(e) => { if (e.target.value) { loadSaved(e.target.value); setMenuOpen(false); } }}>
+            <option value="">📂 Wczytaj zapisaną offline…</option>
+            {saved.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.bundle.pois.length} miejsc{s.dirty ? " *" : ""}</option>)}
           </select>
-        </label>
-        <div className="mhelp">Noclegi szukane zawsze do 5 km. Po zmianie kliknij „Pobierz miejsca".</div>
-        <button className="mbtn go" disabled={!route || fetching} onClick={() => { doFetch(); setMenuOpen(false); }}>{fetching ? "Pobieram…" : "⬇ Pobierz miejsca"}</button>
-        {savedEntry && <div className="mnote">💾 Zapisane offline ({savedEntry.bundle.pois.length} miejsc){savedEntry.dirty ? " · do wysłania" : userEmail ? " · w chmurze" : ""}</div>}
-
-        {PMTILES_URL && <>
-          <div className="msec">Mapa offline</div>
-          <button className="mbtn" disabled={!route || prewarming} onClick={doPrewarm}>{prewarming ? "Pobieram mapę…" : "🗺 Pobierz mapę dla trasy"}</button>
-          <div className="mhelp">Pobiera kafelki korytarza trasy, by mapa działała bez zasięgu. Zrób to przy Wi-Fi przed startem.</div>
-        </>}
-
-        <div className="msec">Zapisane offline</div>
-        <select className="mbtn" value="" onChange={(e) => { if (e.target.value) { loadSaved(e.target.value); setMenuOpen(false); } }}>
-          <option value="">Wczytaj zapisaną…</option>
-          {saved.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.bundle.pois.length} miejsc{s.dirty ? " *" : ""}</option>)}
-        </select>
-        {name && savedEntry && <>
-          <button className="mbtn" onClick={() => renameSaved(name)}>✏ Zmień nazwę</button>
-          <button className="mbtn" onClick={() => removeSaved(name)}>🗑 Usuń bieżącą</button>
-        </>}
-        <button className="mbtn" disabled={!route} onClick={() => { exportFile(); setMenuOpen(false); }}>⤓ Eksportuj do pliku (.json)</button>
-        <label className="mbtn"><input hidden type="file" accept=".json" onChange={(e) => { if (e.target.files?.[0]) { importFile(e.target.files[0]); setMenuOpen(false); } }} />📥 Wczytaj z pliku (.json)</label>
+          {name && savedEntry && <>
+            <button className="mbtn" onClick={() => renameSaved(name)}>✏ Zmień nazwę</button>
+            <button className="mbtn" onClick={() => removeSaved(name)}>🗑 Usuń bieżącą</button>
+          </>}
+          <button className="mbtn" disabled={!route} onClick={() => { exportFile(); setMenuOpen(false); }}>⤓ Eksportuj do pliku (.json)</button>
+          <label className="mbtn"><input hidden type="file" accept=".json" onChange={(e) => { if (e.target.files?.[0]) { importFile(e.target.files[0]); setMenuOpen(false); } }} />📥 Wczytaj z pliku (.json)</label>
+        </div>}
 
         {isSupabaseConfigured() && <>
-          <div className="msec">Konto (opcjonalne)</div>
-          {userEmail ? <>
-            <div className="mnote">{userEmail}</div>
-            <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
-            <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
-            <button className="mbtn" onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button>
-          </> : linkSentTo ? <>
-            <div className="mok">✉ Wysłaliśmy link logowania na <b>{linkSentTo}</b>.<br />Otwórz go <b>na tym urządzeniu</b> (sprawdź też spam) — wrócisz tu zalogowany.</div>
-            <button className="mbtn" onClick={() => { setLinkSentTo(null); setAuthErr(""); }}>↩ Wyślij ponownie / inny e-mail</button>
-          </> : <>
-            <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła — dostajesz link), by przygotować trasy na komputerze i mieć je offline na telefonie.</div>
-            <input className="mbtn" type="email" placeholder="twój e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <button className="mbtn go" disabled={!email || authBusy} onClick={login}>{authBusy ? "Wysyłam…" : "✉ Wyślij link logowania"}</button>
-            {authErr && <div className="merr">⚠ Nie udało się: {authErr}</div>}
-          </>}
+          <button className="msecbtn" onClick={() => setMenuSec(menuSec === "account" ? null : "account")}>
+            <span>👤 Konto i e-mail {userEmail ? "✓" : ""}</span><span className="chev">{menuSec === "account" ? "▾" : "▸"}</span>
+          </button>
+          {menuSec === "account" && <div className="msecbody">
+            {userEmail ? <>
+              <div className="mnote">{userEmail}</div>
+              <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym mailem — pobiorą się automatycznie do pamięci offline.</div>
+              <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
+              <button className="mbtn" onClick={() => signOut().then(() => setUserEmail(null))}>Wyloguj</button>
+            </> : linkSentTo ? <>
+              <div className="mok">✉ Wysłaliśmy link logowania na <b>{linkSentTo}</b>.<br />Otwórz go <b>na tym urządzeniu</b> (sprawdź też spam) — wrócisz tu zalogowany.</div>
+              <button className="mbtn" onClick={() => { setLinkSentTo(null); setAuthErr(""); }}>↩ Wyślij ponownie / inny e-mail</button>
+            </> : <>
+              <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się mailem (bez hasła — dostajesz link), by przygotować trasy na komputerze i mieć je offline na telefonie.</div>
+              <input className="mbtn" type="email" placeholder="twój e-mail" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <button className="mbtn go" disabled={!email || authBusy} onClick={login}>{authBusy ? "Wysyłam…" : "✉ Wyślij link logowania"}</button>
+              {authErr && <div className="merr">⚠ Nie udało się: {authErr}</div>}
+            </>}
+          </div>}
         </>}
 
-        <div className="msec">O aplikacji i kontakt</div>
+        <div className="msec">Pomoc</div>
         <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
         <button className="mbtn tint-indigo" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>ℹ️ O MiroBike</button>
         <button className="mbtn tint-violet" onClick={doShare}>📤 Poleć aplikację</button>
