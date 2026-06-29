@@ -541,6 +541,12 @@ export default function App() {
         )}
         {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
+        {isSupabaseConfigured() && userEmail && (
+          <button className="avatar" title={`Zalogowano: ${userEmail}`} aria-label="Konto" onClick={() => { setMenuSec("account"); setMenuOpen(true); }}>
+            {(userEmail.trim()[0] || "?").toUpperCase()}
+            <span className="avatar-dot" />
+          </button>
+        )}
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Plan</button>
       </header>
@@ -621,6 +627,19 @@ export default function App() {
             </>
           ) : (
             <div className="guide">
+              {!route && saved.length > 0 && (
+                <div className="omaps">
+                  <div className="omaps-h">🗺️ Twoje mapy offline<small>dotknij, by otworzyć</small></div>
+                  {saved.map((s) => (
+                    <button key={s.name} className="omap" onClick={() => loadSaved(s.name)}>
+                      <span className="omap-nm">{s.name}</span>
+                      <span className="omap-meta">{s.bundle.total_km.toFixed(0)} km · {s.bundle.pois.length} miejsc</span>
+                      <span className="omap-go">›</span>
+                    </button>
+                  ))}
+                  <div className="omaps-or">albo wczytaj nową trasę poniżej</div>
+                </div>
+              )}
               <div className={"gstep " + (route ? "done" : "active")}>
                 <span className="gn">{route ? "✓" : "1"}</span>
                 <div>
@@ -642,6 +661,15 @@ export default function App() {
                   {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
                 </div>
               </div>
+              {isSupabaseConfigured() && !userEmail && (
+                <div className="gstep">
+                  <span className="gn">👤</span>
+                  <div>
+                    <b>Konto (opcjonalnie)</b><br /><small>Zaloguj się, by przygotować trasy na komputerze i mieć je <b>offline na telefonie</b>.</small>
+                    <button className="gbtn" onClick={() => { setMenuSec("account"); setMenuOpen(true); }}>👤 Zaloguj się</button>
+                  </div>
+                </div>
+              )}
               {route && ds && <ElevationProfile ds={ds} totalKm={totalKm} cur={null} />}
               {pois.length > 0 && (
                 <ul className="list">
