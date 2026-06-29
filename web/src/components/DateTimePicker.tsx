@@ -14,6 +14,17 @@ function sameDay(a: Date, b: Date): boolean {
 }
 const pad = (n: number) => String(n).padStart(2, "0");
 
+const IconCalendar = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4.5" width="18" height="16" rx="2.5" /><path d="M3 9.5h18" /><path d="M8 2.5v4" /><path d="M16 2.5v4" />
+  </svg>
+);
+const IconClock = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" />
+  </svg>
+);
+
 /** Picker daty i godziny w stylu aplikacji (zastępuje brzydki natywny datetime-local). */
 export function DateTimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const sel = parse(value);
@@ -46,7 +57,7 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
   return (
     <div className="dtp">
       <button type="button" className="dtp-trigger" onClick={() => { setView(new Date(sel.getFullYear(), sel.getMonth(), 1)); setOpen(true); }}>
-        <span className="dtp-ico">📅</span>
+        <span className="dtp-ico"><IconCalendar /></span>
         <span className="dtp-val">{label}</span>
       </button>
 
@@ -67,7 +78,7 @@ export function DateTimePicker({ value, onChange }: { value: string; onChange: (
                 : <span key={i} />)}
             </div>
             <div className="dtp-time">
-              <span className="dtp-clock">🕐</span>
+              <span className="dtp-clock"><IconClock /></span>
               <select value={sel.getHours()} onChange={(e) => setTime(+e.target.value, sel.getMinutes())}>
                 {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{pad(h)}</option>)}
               </select>

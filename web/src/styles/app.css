@@ -186,7 +186,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .dtp-trigger { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
   background: #232732; border: 1px solid var(--line); color: var(--txt); border-radius: 8px; padding: 11px; font-size: 15px; }
 .dtp-trigger:active { border-color: var(--route); }
-.dtp-ico { font-size: 16px; filter: saturate(0) brightness(2.4); }   /* czytelna, jasna ikona */
+.dtp-ico { display: inline-flex; color: var(--route); }   /* wektorowa ikona, kolor akcentu */
 .dtp-val { font-weight: 600; }
 .dtp-scrim { position: fixed; inset: 0; background: #000b; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .dtp-pop { width: min(360px, 92vw); background: var(--ink2); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 16px 50px #000a; }
@@ -202,7 +202,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .dtp-day.today { border-color: var(--route); }
 .dtp-day.sel { background: var(--route); color: #04201e; font-weight: 800; border-color: transparent; }
 .dtp-time { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-.dtp-clock { font-size: 17px; filter: saturate(0) brightness(2.4); }
+.dtp-clock { display: inline-flex; color: var(--route); }
 .dtp-time select { flex: 0 0 auto; background: #232732; border: 1px solid var(--line); color: var(--txt); border-radius: 8px; padding: 10px 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
 .dtp-sep { font-weight: 800; font-size: 18px; }
 .dtp-ok { margin-left: auto; background: var(--route); color: #04201e; border: none; border-radius: 999px; padding: 10px 20px; font-size: 14px; font-weight: 800; cursor: pointer; }
