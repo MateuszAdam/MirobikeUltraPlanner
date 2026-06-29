@@ -4,6 +4,7 @@ import { etaAheadDelta, fmtDur } from "../lib/eta";
 import { CATS } from "../lib/categories";
 import { CAT_COLOR, is24h, defaultCfg, fmtDist } from "../lib/ui";
 import { MODES, planTrip, candidates, fmtClock } from "../lib/trip";
+import { DateTimePicker } from "./DateTimePicker";
 import type { DownRoute, Poi, TripState } from "../lib/types";
 
 // ——— Szczegóły miejsca ———
@@ -96,7 +97,7 @@ export function PlannerSheet(props: {
               <label>Dystans / dzień (km)<input type="number" min={40} max={600} step={10} value={cfgDraft.dailyKm} onChange={(e) => setCfgDraft((c) => ({ ...c, dailyKm: +e.target.value }))} /></label>
               <label>Sen (h)<input type="number" min={0} max={12} value={cfgDraft.sleepHours} onChange={(e) => setCfgDraft((c) => ({ ...c, sleepHours: +e.target.value }))} /></label>
               <label>Godz. obiadu<input type="number" min={10} max={20} value={cfgDraft.lunchHour} onChange={(e) => setCfgDraft((c) => ({ ...c, lunchHour: +e.target.value }))} /></label>
-              <label className="wide">Start (data i godzina)<input type="datetime-local" value={cfgDraft.startISO} onChange={(e) => setCfgDraft((c) => ({ ...c, startISO: e.target.value }))} /></label>
+              <label className="wide">Start (data i godzina)<DateTimePicker value={cfgDraft.startISO} onChange={(v) => setCfgDraft((c) => ({ ...c, startISO: v }))} /></label>
             </div>
             <button className="favbig" onClick={generate}>🗺 Ułóż plan</button>
           </>
