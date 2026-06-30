@@ -24,7 +24,9 @@ body {
 }
 button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 
-.layout { display: grid; grid-template-rows: auto auto auto auto 1fr; height: 100vh; height: 100dvh; max-width: 100vw; overflow: hidden; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto 1fr; height: 100vh; height: 100dvh; max-width: 100vw; overflow: hidden; }
+/* zapobiega „rozpychaniu" grida przez przewijany rząd filtrów */
+.filterbar { min-width: 0; overflow: hidden; }
 .bar { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px; border-bottom: 1px solid var(--line); }
 .bar strong { font-size: 15px; cursor: pointer; }
 .bar .spacer { flex: 1; }
@@ -63,10 +65,14 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 
 .quick { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--ink2); }
 /* Filtry kategorii — jeden rząd, przewijany w poziomie (nie zajmuje pół ekranu) */
-.filters { display: flex; gap: 7px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line);
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+.filterbar { position: relative; border-bottom: 1px solid var(--line); }
+.filters { display: flex; gap: 7px; align-items: center; padding: 8px 12px;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; scroll-padding-right: 36px; }
 .filters::-webkit-scrollbar { display: none; }
 .filters .chip { flex: 0 0 auto; }
+/* gradient na prawej krawędzi — sygnał „przewiń, jest więcej filtrów" */
+.filters-fade { position: absolute; top: 0; right: 0; bottom: 0; width: 38px; pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--ink)); }
 .bar, .quick { max-width: 100vw; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 9px 12px; min-height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--surf); color: var(--txt); cursor: pointer; white-space: nowrap; }
 .chip .dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -318,7 +324,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .iconbtn:active { transform: scale(.95); }
 
 /* Paski narzędzi — przyciemniony dusk z rozmyciem */
-.toolbar, .quick { background: rgba(16, 26, 51, .6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.toolbar, .quick, .filterbar { background: rgba(16, 26, 51, .6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 
 /* Czipy — premium feel: szkło, miękkie aktywne z poświatą */
 .chip { background: var(--surf); transition: background .15s, border-color .15s, transform .08s; }
@@ -381,7 +387,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 :root[data-theme="light"] .bar { background: rgba(255, 255, 255, .62); box-shadow: 0 1px 0 rgba(216, 138, 31, .2); }
 :root[data-theme="light"] .toolbar,
 :root[data-theme="light"] .quick,
-:root[data-theme="light"] .filters { background: rgba(255, 255, 255, .55); }
+:root[data-theme="light"] .filterbar { background: rgba(255, 255, 255, .55); }
 :root[data-theme="light"] .card,
 :root[data-theme="light"] .menu,
 :root[data-theme="light"] .dtp-pop { background: rgba(255, 255, 255, .95); }
@@ -426,3 +432,30 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 :root[data-theme="light"] .auth .lang.on,
 :root[data-theme="light"] .auth-tab[aria-selected="true"] { background: rgba(216, 138, 31, .16); }
 :root[data-theme="light"] .auth-field input { background: rgba(22, 32, 58, .04); }
+
+/* ===================== Mikrointerakcje — apka „żyje" ===================== */
+.chip, .mbtn, .act, .favbig, .gbtn, .iconbtn, .msecbtn, .omap, .seg button,
+.auth-btn, .auth-ghost, .auth-tab, .lang, .linkbtn, .auth-link, .dh button,
+.dtp-trigger, .dtp-day, .dtp-nav button, .dtp-ok, .viewbar button, .day > summary {
+  transition: transform .1s ease, filter .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+/* wciśnięcie — tactile feedback (dobre zwłaszcza na telefonie) */
+.chip:active, .mbtn:active, .act:active, .favbig:active, .iconbtn:active, .msecbtn:active,
+.omap:active, .seg button:active, .auth-ghost:active, .auth-tab:active, .lang:active,
+.dh button:active, .dtp-trigger:active, .dtp-day:active, .dtp-nav button:active, .viewbar button:active {
+  transform: scale(.95);
+}
+.gbtn:active, .auth-btn.primary:active, .mbtn.go:active, .dtp-ok:active, .toolbar button.go:active {
+  transform: scale(.98); filter: brightness(1.06);
+}
+.linkbtn:active, .auth-link:active { opacity: .6; }
+/* hover — tylko na urządzeniach ze wskaźnikiem (nie „zacina się" na mobile) */
+@media (hover: hover) {
+  .chip:hover, .iconbtn:hover, .msecbtn:hover, .act:hover, .favbig:hover, .mbtn:hover,
+  .omap:hover, .dtp-trigger:hover, .dtp-day:hover, .auth-ghost:hover { border-color: var(--route); }
+  .gbtn:hover, .mbtn.go:hover, .toolbar button.go:hover, .auth-btn.primary:hover,
+  .dtp-ok:hover, .support-cta:hover, .seg button.on:hover { filter: brightness(1.07); }
+  .linkbtn:hover, .auth-link:hover { filter: brightness(1.15); text-decoration: underline; }
+  .day > summary:hover b { color: var(--route); }
+}

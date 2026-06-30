@@ -599,15 +599,6 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
   return (
     <div className="layout">
       <header className="bar">
-        <button className="iconbtn" aria-label="Menu" onClick={() => setMenuOpen(true)}>☰</button>
-        <strong onClick={() => { setDetail(null); setShowPlan(false); }}>MiroBike</strong>
-        {!fetching && (
-          <span className={"state " + (route ? "ok" : "warn")}>
-            {route ? `✓ ${name}${pois.length ? ` · ${pois.length}` : ""}` : "⚠ brak trasy"}
-          </span>
-        )}
-        {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
-        <span className="spacer" />
         {isSupabaseConfigured() && (userEmail ? (
           <span className="avatar" title={`Zalogowano: ${userEmail}`} aria-label={`Zalogowano: ${userEmail}`}>
             {(userEmail.trim()[0] || "?").toUpperCase()}
@@ -618,29 +609,34 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
             👤<span className="avatar-dot off" />
           </span>
         ))}
-        <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
-        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Planer</button>
+        {!fetching && (
+          <span className={"state " + (route ? "ok" : "warn")}>
+            {route ? `${name}${pois.length ? ` · ${pois.length}` : ""}` : "⚠ brak trasy"}
+          </span>
+        )}
+        {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
+        <span className="spacer" />
+        <button className="iconbtn" aria-label="Menu" onClick={() => setMenuOpen(true)}>☰</button>
       </header>
 
       <div className="quick">
         {missing > 0 && <button className="chip refetch" disabled={fetching} onClick={() => doFetch(true)}>⬇ Dobierz brakujące ({missing})</button>}
         <button className={"chip gps " + (gpsOn ? "on" : "")} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
         <button className="chip ride-btn" title="Tryb jazdy — duży ekran" onClick={() => setRideMode(true)}>🚴 Jazda</button>
-        <span className="spacer" />
-        <label className="rng">w zasięgu
-          <select value={range} onChange={(e) => setRange(+e.target.value)}>
-            <option value={50}>50 km</option><option value={100}>100 km</option><option value={200}>200 km</option>
-          </select>
-        </label>
+        <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Planer</button>
       </div>
 
-      <div className="filters">
-        <button className={"chip " + (open24Only ? "on" : "")} title="Tylko czynne całodobowo" onClick={() => setOpen24Only((v) => !v)}>🌙 24h</button>
-        {FILTER_CATS.map((c) => (
-          <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
-            <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
-          </button>
-        ))}
+      <div className="filterbar">
+        <div className="filters">
+          <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Tylko ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
+          <button className={"chip " + (open24Only ? "on" : "")} title="Tylko czynne całodobowo" onClick={() => setOpen24Only((v) => !v)}>🌙 24h</button>
+          {FILTER_CATS.map((c) => (
+            <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
+              <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
+            </button>
+          ))}
+        </div>
+        <div className="filters-fade" aria-hidden="true" />
       </div>
 
       {(() => {
@@ -825,6 +821,11 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
           </div>
           <button className={"mbtn " + (lowPower ? "go" : "")} onClick={() => setLowPower((v) => !v)}>🔋 Oszczędzanie baterii: {lowPower ? "włączone" : "wyłączone"}</button>
           <div className="mhelp">Rzadszy odczyt GPS i niższa dokładność — bateria starcza znacznie dłużej na całodniowej trasie. Włącz, gdy nie potrzebujesz pozycji co sekundę.</div>
+          <label className="mrow">Zasięg listy „przede mną"
+            <select value={range} onChange={(e) => setRange(+e.target.value)}>
+              <option value={50}>50 km</option><option value={100}>100 km</option><option value={200}>200 km</option>
+            </select>
+          </label>
         </div>}
 
         <div className="msec">Pomoc</div>
