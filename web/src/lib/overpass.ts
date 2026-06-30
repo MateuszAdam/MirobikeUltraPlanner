@@ -21,11 +21,14 @@ const FILTERS: Record<CatKey, { q: string } | null> = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function overpass(q: string, attempts = 4): Promise<any> {
+async function overpass(q: string, attempts = 4, ext?: AbortSignal): Promise<any> {
   let last = "";
   for (let a = 0; a < attempts; a++) {
+    if (ext?.aborted) throw new Error("anulowano");
     const url = OVERPASS[a % OVERPASS.length];
     const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    ext?.addEventListener("abort", onAbort, { once: true });
     const to = setTimeout(() => ctrl.abort(), 95000);
     try {
       const res = await fetch(url, {
@@ -40,7 +43,10 @@ async function overpass(q: string, attempts = 4): Promise<any> {
       if (![429, 500, 502, 503, 504].includes(res.status)) break;
     } catch (e: any) {
       clearTimeout(to);
+      if (ext?.aborted) throw new Error("anulowano");
       last = e?.name === "AbortError" ? "timeout" : String(e?.message || e);
+    } finally {
+      ext?.removeEventListener("abort", onAbort);
     }
     await sleep(1500 * (a + 1) + Math.random() * 800);
   }
@@ -52,6 +58,7 @@ export interface FetchOptions {
   radiusOther: number; // [m] dla sklepów/jedzenia/paliwa
   radiusSleep?: number; // [m] dla noclegów (domyślnie max(radiusOther, 5000))
   onProgress?: (done: number, total: number, found: number) => void;
+  signal?: AbortSignal; // przerwanie (przycisk „Pomiń")
 }
 
 interface RawPoi { name: string; cats: CatKey[]; lat: number; lon: number; tags: Record<string, string>; }
@@ -100,12 +107,13 @@ export async function fetchPois(route: Route, opts: FetchOptions, prev?: FetchSe
   const S = prev ?? buildSession(route, opts);
   const todo = S.batches.map((_, i) => i).filter((i) => !S.done.has(i));
   for (const bi of todo) {
+    if (opts.signal?.aborted) break;
     opts.onProgress?.(S.done.size, S.batches.length, S.seen.size);
     const chain = S.batches[bi].join(",");
     const body = S.filters.map((f) => `  ${f.q}(around:${f.r},${chain});`).join("\n");
     const query = `[out:json][timeout:90];\n(\n${body}\n);\nout center tags;`;
     try {
-      const data = await overpass(query);
+      const data = await overpass(query, 4, opts.signal);
       for (const el of data.elements || []) {
         const k = el.type + el.id;
         if (S.seen.has(k)) continue;

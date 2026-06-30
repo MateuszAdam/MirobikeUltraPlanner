@@ -112,6 +112,8 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
   const [prewarming, setPrewarming] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; found: number } | null>(null);
   const fetchSessionRef = useRef<FetchSession | null>(null);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const wantFetchRef = useRef(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authErr, setAuthErr] = useState("");
@@ -226,6 +228,16 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSaved]);
 
+  // Auto-pobieranie miejsc po wczytaniu GPX (flaga ustawiana w onGpx). Stan trasy
+  // jest już scommitowany, więc fetch i zapis offline mają poprawną nazwę/trasę.
+  useEffect(() => {
+    if (wantFetchRef.current && route && pois.length === 0) {
+      wantFetchRef.current = false;
+      doFetch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route]);
+
   // Lekki zrzut stanu jazdy (km + progi alertów) do IndexedDB — przetrwa reload na trasie.
   useEffect(() => {
     if (hereKm == null || !name) return;
@@ -313,26 +325,35 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
     setStatus(`Trasa: ${nm} · ${(r.totalM / 1000).toFixed(1)} km · ↑ ${Math.round(tp.ascent)} m · ≈ ${fmtDur(tp.time[tp.time.length - 1])}. Teraz „Pobierz miejsca".`);
   }
   async function onGpx(file: File) {
-    try { loadRoute(parseGPX(await file.text()), file.name.replace(/\.gpx$/i, "")); }
-    catch (e: any) { setStatus("Błąd GPX: " + e.message); }
+    try {
+      const r = parseGPX(await file.text());
+      wantFetchRef.current = true; // auto-pobieranie miejsc po wczytaniu (efekt niżej)
+      loadRoute(r, file.name.replace(/\.gpx$/i, ""));
+    } catch (e: any) { setStatus("Błąd GPX: " + e.message); }
   }
   async function doFetch(resume = false) {
-    if (!route) return;
+    if (!route || fetching) return;
+    const ctrl = new AbortController();
+    fetchAbortRef.current = ctrl;
     setFetching(true);
     try {
       const res = await fetchPois(
         route,
-        { cats: new Set<CatKey>(FETCH_CATS), radiusOther: fetchRadius, onProgress: (done, total, found) => setProgress({ done, total, found }) },
+        { cats: new Set<CatKey>(FETCH_CATS), radiusOther: fetchRadius, signal: ctrl.signal, onProgress: (done, total, found) => setProgress({ done, total, found }) },
         resume ? fetchSessionRef.current ?? undefined : undefined,
       );
+      if (ctrl.signal.aborted) { setStatus("Pominięto pobieranie miejsc — możesz je dobrać w menu (Trasa i miejsca → Pobierz miejsca)."); return; }
       fetchSessionRef.current = res.session;
       setPois(res.pois); setGaps(computeGaps(res.pois)); setMissing(res.failed);
       await persistLocal(res.pois, favorites);
       setStatus(res.failed > 0
         ? `${res.pois.length} miejsc — zapisane offline. ${res.failed} paczek nie pobrano: „Dobierz brakujące".`
         : `${res.pois.length} miejsc — zapisane offline. Włącz GPS lub dotknij mapy.`);
-    } catch (e: any) { setStatus("Błąd pobierania: " + e.message); }
-    finally { setFetching(false); setProgress(null); }
+    } catch (e: any) {
+      setStatus(navigator.onLine
+        ? `Nie udało się pobrać miejsc (${e.message}). Trasa jest gotowa — spróbuj ponownie w menu.`
+        : "Brak internetu — trasa jest gotowa. Miejsca pobierzesz w menu, gdy będzie sieć.");
+    } finally { setFetching(false); setProgress(null); fetchAbortRef.current = null; }
   }
   // Po lokalnym zapisie — jeśli zalogowany, wyślij zmiany do chmury (z opóźnieniem).
   function pushSoon() {
@@ -593,7 +614,6 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
   }, [pois, planPids, hereKm, route, totalKm]);
   const offRoute = hereOff > 250;
 
-  const guideStep = !route ? 1 : !pois.length ? 2 : 3;
   const savedEntry = saved.find((s) => s.name === name);
 
   return (
@@ -718,18 +738,20 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
                   <label className="gbtn"><input hidden type="file" accept=".gpx" onChange={(e) => e.target.files?.[0] && onGpx(e.target.files[0])} />{route ? "Zmień trasę (.gpx)" : "Wczytaj trasę (.gpx)"}</label>
                 </div>
               </div>
-              <div className={"gstep " + (!route ? "" : pois.length ? "done" : "active")}>
-                <span className="gn">{pois.length ? "✓" : "2"}</span>
+              <div className={"gstep " + (route && pois.length ? "active" : "")}>
+                <span className="gn">2</span>
                 <div>
-                  <b>Miejsca</b><br /><small>{pois.length ? `${pois.length} miejsc` : "Pobierz noclegi, sklepy, jedzenie, paliwo."}</small>
-                  {route && <button className="gbtn" disabled={fetching} onClick={() => doFetch()}>{fetching ? "Pobieram…" : pois.length ? "Pobierz ponownie" : "Pobierz miejsca"}</button>}
-                </div>
-              </div>
-              <div className={"gstep " + (guideStep === 3 ? "active" : "")}>
-                <span className="gn">3</span>
-                <div>
-                  <b>Pozycja</b><br /><small>Włącz GPS albo dotknij mapy, by zobaczyć co masz przed sobą.</small>
-                  {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
+                  {route && !pois.length && !fetching ? (
+                    <>
+                      <b>Miejsca</b><br /><small>Nie pobrano miejsc wzdłuż trasy. Pobierz je, by zobaczyć noclegi, sklepy, wodę i jedzenie.</small>
+                      <button className="gbtn" onClick={() => doFetch()}>⬇ Pobierz miejsca</button>
+                    </>
+                  ) : (
+                    <>
+                      <b>Pozycja</b><br /><small>{pois.length ? `${pois.length} miejsc wzdłuż trasy. Włącz GPS albo dotknij mapy, by zobaczyć co masz przed sobą.` : "Włącz GPS albo dotknij mapy, by zobaczyć co masz przed sobą."}</small>
+                      {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
+                    </>
+                  )}
                 </div>
               </div>
               {route && ds && <ElevationProfile ds={ds} totalKm={totalKm} cur={null} />}
@@ -846,6 +868,19 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
       )}
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
       {showAbout && <AboutSheet onClose={() => setShowAbout(false)} />}
+
+      {fetching && (
+        <div className="fetch-overlay">
+          <div className="fetch-card">
+            <div className="fetch-spin" />
+            <div className="fetch-title">Przygotowuję trasę…</div>
+            <div className="fetch-sub">
+              Pobieram miejsca wzdłuż trasy{progress ? <> — <b>{progress.found}</b> znalezionych · {progress.done}/{progress.total} fragmentów</> : "…"}
+            </div>
+            <button className="fetch-skip" onClick={() => fetchAbortRef.current?.abort()}>Pomiń</button>
+          </div>
+        </div>
+      )}
 
       {rideMode && (
         <div className="ride" onClick={() => setRideMode(false)}>

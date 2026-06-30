@@ -433,6 +433,17 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 :root[data-theme="light"] .auth-tab[aria-selected="true"] { background: rgba(216, 138, 31, .16); }
 :root[data-theme="light"] .auth-field input { background: rgba(22, 32, 58, .04); }
 
+/* Nakładka pobierania miejsc — blur na całość + postęp + „Pomiń" */
+.fetch-overlay { position: fixed; inset: 0; z-index: 1400; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(10, 15, 30, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.fetch-card { background: var(--ink2); border: 1px solid var(--line); border-radius: 18px; padding: 28px 24px; width: 100%; max-width: 320px; text-align: center; box-shadow: 0 24px 70px -24px #000c; }
+.fetch-spin { width: 40px; height: 40px; margin: 0 auto 16px; border-radius: 50%; border: 3px solid var(--surf2); border-top-color: var(--route); animation: fspin .8s linear infinite; }
+@keyframes fspin { to { transform: rotate(360deg); } }
+.fetch-title { font-family: var(--display); font-weight: 700; font-size: 17px; }
+.fetch-sub { font-size: 13px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
+.fetch-sub b { color: var(--route); }
+.fetch-skip { margin-top: 18px; background: var(--surf); border: 1px solid var(--line); color: var(--txt); border-radius: 10px; padding: 11px 22px; font-size: 14px; font-weight: 600; cursor: pointer; }
+
 /* ===================== Mikrointerakcje — apka „żyje" ===================== */
 .chip, .mbtn, .act, .favbig, .gbtn, .iconbtn, .msecbtn, .omap, .seg button,
 .auth-btn, .auth-ghost, .auth-tab, .lang, .linkbtn, .auth-link, .dh button,
