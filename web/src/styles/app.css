@@ -202,12 +202,8 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .seg button.on { background: var(--route); color: var(--on); box-shadow: 0 4px 14px -7px var(--dawn); }
 .mbtn:disabled { opacity: .45; }
 /* kolorowe akcenty przycisków (jak w GrapeVest) */
-/* Sekcja „Pomoc" — jedna ciepła rodzina (świt) w trzech natężeniach,
-   zamiast tęczy. Spokojne tło dla funkcji, mocniejszy bursztyn dla Instrukcji,
-   pełny bursztyn dla wsparcia. */
+/* Sekcja „Pomoc" — jednolite, spokojne przyciski w ciepłym tonie „świtu". */
 .mbtn.help { background: rgba(231, 161, 75, .06); border-color: rgba(231, 161, 75, .2); color: var(--txt); font-weight: 600; }
-.mbtn.tint-amber { background: rgba(231, 161, 75, .14); border-color: rgba(231, 161, 75, .42); color: #f2c98a; font-weight: 700; }
-.mbtn.solid-amber { background: var(--here); border-color: transparent; color: #3a2e00; font-weight: 800; }
 
 .about .ap { font-size: 13.5px; line-height: 1.55; margin: 0 0 12px; }
 .about .ap b { color: var(--txt); }
@@ -414,9 +410,8 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 :root[data-theme="light"] .omap { background: linear-gradient(135deg, rgba(216, 138, 31, .16), rgba(93, 111, 147, .1)); border-color: rgba(216, 138, 31, .3); }
 :root[data-theme="light"] .list li .star { color: #aab2c2; }
 
-/* przyciski menu „Pomoc" — jasne warianty (ta sama rodzina bursztynu) */
+/* przyciski menu „Pomoc" — wariant jasny */
 :root[data-theme="light"] .mbtn.help { background: rgba(216, 138, 31, .07); border-color: rgba(216, 138, 31, .22); color: var(--txt); }
-:root[data-theme="light"] .mbtn.tint-amber { background: rgba(216, 138, 31, .15); border-color: rgba(216, 138, 31, .42); color: #8a5512; }
 
 /* ekran logowania — jasny wariant */
 :root[data-theme="light"] .auth {

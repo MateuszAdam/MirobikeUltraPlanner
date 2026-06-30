@@ -855,9 +855,9 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
         <button className="mbtn help" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
         <button className="mbtn help" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>ℹ️ O MiroBike</button>
         <button className="mbtn help" onClick={doShare}>📤 Poleć aplikację</button>
-        <button className="mbtn tint-amber" onClick={() => { setMenuOpen(false); navigate("/pomoc"); }}>📖 Instrukcja obsługi</button>
+        <button className="mbtn help" onClick={() => { setMenuOpen(false); navigate("/pomoc"); }}>📖 Instrukcja obsługi</button>
         <a className="mbtn help" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt</a>
-        <a className="mbtn solid-amber" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
+        <a className="mbtn help" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
       </div>
 
       {detail && (
