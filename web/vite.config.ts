@@ -40,6 +40,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // SPA: nawigacje (np. /pomoc) serwuj z app-shella — działa też offline.
+        // Denylist wyklucza adresy z rozszerzeniem pliku, by nie nadpisać assetów.
+        navigateFallback: "index.html",
+        navigateFallbackDenylist: [/^\/[^?#]+\.[^/?#]+$/],
         // PMTiles są pobierane przez byte-range — cache'ujemy zakresy.
         runtimeCaching: [
           {

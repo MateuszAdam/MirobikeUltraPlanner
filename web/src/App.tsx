@@ -20,6 +20,7 @@ import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/S
 import { useGps } from "./hooks/useGps";
 import { prewarmCorridor } from "./lib/prewarm";
 import { useTheme } from "./theme";
+import { navigate } from "./lib/nav";
 
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 const PMTILES_URL = import.meta.env.VITE_PMTILES_URL as string | undefined;
@@ -851,7 +852,8 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
         </div>}
 
         <div className="msec">Pomoc</div>
-        <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
+        <button className="mbtn tint-sky" onClick={() => { setMenuOpen(false); navigate("/pomoc"); }}>📖 Instrukcja obsługi</button>
+        <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać (skrót)</button>
         <button className="mbtn tint-indigo" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>ℹ️ O MiroBike</button>
         <button className="mbtn tint-violet" onClick={doShare}>📤 Poleć aplikację</button>
         <a className="mbtn solid-amber" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>

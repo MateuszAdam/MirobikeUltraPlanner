@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import App from "./App";
 import { AuthPanel } from "./components/AuthPanel";
+import { HelpPage } from "./components/HelpPage";
+import { navigate } from "./lib/nav";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { getSessionEmail, onAuthChange } from "./lib/sync";
 import { biometricSupported, biometricInfo, biometricUnlock } from "./lib/biometric";
@@ -24,6 +26,14 @@ export default function Root() {
   const [localMode, setLocalMode] = useState(getLocal());
   const [recovery, setRecovery] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const [path, setPath] = useState(() => window.location.pathname);
+
+  // Reaguj na zmianę adresu (przyciski wstecz/dalej + nasza navigate()).
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     if (!configured) return;
@@ -58,14 +68,19 @@ export default function Root() {
 
   if (!ready) return <div className="boot" />;
 
-  // recovery zawsze pokazuje ekran ustawiania hasła
+  let screen: ReactNode;
   if (configured && recovery) {
-    return <AuthPanel recovery onGuest={enterGuest} onRecoveryDone={recoveryDone} bioEnabled={bioEnabled} onBioUnlock={onBioUnlock} />;
+    // recovery zawsze pokazuje ekran ustawiania hasła
+    screen = <AuthPanel recovery onGuest={enterGuest} onRecoveryDone={recoveryDone} bioEnabled={bioEnabled} onBioUnlock={onBioUnlock} />;
+  } else if (!configured || email || localMode) {
+    // zalogowany lub tryb lokalny lub brak Supabase → aplikacja
+    screen = <App localMode={!email} onWantLogin={configured ? wantLogin : undefined} />;
+  } else {
+    // brak sesji, brak trybu lokalnego → landing
+    screen = <AuthPanel recovery={false} onGuest={enterGuest} onRecoveryDone={recoveryDone} bioEnabled={bioEnabled} onBioUnlock={onBioUnlock} />;
   }
-  // zalogowany lub tryb lokalny lub brak Supabase → aplikacja
-  if (!configured || email || localMode) {
-    return <App localMode={!email} onWantLogin={configured ? wantLogin : undefined} />;
-  }
-  // brak sesji, brak trybu lokalnego → landing
-  return <AuthPanel recovery={false} onGuest={enterGuest} onRecoveryDone={recoveryDone} bioEnabled={bioEnabled} onBioUnlock={onBioUnlock} />;
+
+  // „/pomoc" — pełna instrukcja jako nakładka nad bieżącym ekranem (stan aplikacji zachowany)
+  const showHelp = path === "/pomoc" || path === "/pomoc/";
+  return <>{screen}{showHelp && <HelpPage onClose={() => navigate("/")} />}</>;
 }

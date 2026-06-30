@@ -109,6 +109,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "foot": "Logując się, akceptujesz, że trasy z tego urządzenia trafią do Twojego konta i będą dostępne na innych urządzeniach.",
     "local.sync": "Zaloguj, by synchronizować",
     "local.signin": "Zaloguj",
+    "link.guide": "📖 Jak to działa? Zobacz instrukcję",
   },
   en: {
     "eyebrow": "Ultra planner · offline",
@@ -162,6 +163,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "foot": "By signing in, you agree that routes from this device will be added to your account and available on other devices.",
     "local.sync": "Sign in to sync",
     "local.signin": "Sign in",
+    "link.guide": "📖 How does it work? Read the guide",
   },
   de: {
     "eyebrow": "Ultra-Planer · offline",
@@ -215,5 +217,6 @@ const DICT: Record<Lang, Record<string, string>> = {
     "foot": "Mit der Anmeldung stimmst du zu, dass Routen von diesem Gerät zu deinem Konto hinzugefügt und auf anderen Geräten verfügbar werden.",
     "local.sync": "Anmelden zum Synchronisieren",
     "local.signin": "Anmelden",
+    "link.guide": "📖 Wie funktioniert's? Zur Anleitung",
   },
 };

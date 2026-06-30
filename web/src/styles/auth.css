@@ -102,6 +102,7 @@
 .auth-note { background: rgba(125, 219, 166, .07); border: 1px solid rgba(125, 219, 166, .18); color: var(--aok); border-radius: 11px; padding: 14px; font-size: 13.5px; line-height: 1.5; margin-top: 16px; }
 .auth-note b { color: #bff0d3; }
 .auth-foot { margin-top: 22px; font-size: 11.5px; color: var(--aink-faint); line-height: 1.5; text-align: center; }
+.auth-link.guide { display: block; margin: 14px auto 0; text-align: center; font-weight: 600; }
 
 @media (max-width: 900px) {
   .auth-wrap { grid-template-columns: 1fr; gap: 30px; padding-top: 64px; padding-bottom: 48px; }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SpokeWheel } from "./SpokeWheel";
 import { useI18n, LANGS } from "../i18n";
 import { signIn, signUp, requestReset, setNewPassword } from "../lib/sync";
+import { navigate } from "../lib/nav";
 
 type View = "login" | "register" | "reset" | "newpass";
 
@@ -198,6 +199,7 @@ export function AuthPanel({ recovery, onGuest, onRecoveryDone, bioEnabled, onBio
               <div className="auth-divider"><span>{t("divider.or")}</span></div>
               <button className="auth-ghost" onClick={onGuest}>{t("btn.guest")} <span className="arrow">→</span></button>
               <p className="auth-foot">{t("foot")}</p>
+              <button type="button" className="auth-link guide" onClick={() => navigate("/pomoc")}>{t("link.guide")}</button>
             </>
           )}
         </section>
