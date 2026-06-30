@@ -19,7 +19,6 @@ import { ElevationProfile } from "./components/ElevationProfile";
 import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/Sheets";
 import { useGps } from "./hooks/useGps";
 import { prewarmCorridor } from "./lib/prewarm";
-import { useI18n } from "./i18n";
 import { useTheme } from "./theme";
 
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
@@ -67,8 +66,7 @@ function rideAlert(title: string, body: string) {
   } catch { /* ignore */ }
 }
 
-export default function App({ localMode = false, onWantLogin }: { localMode?: boolean; onWantLogin?: () => void } = {}) {
-  const { t } = useI18n();
+export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?: () => void } = {}) {
   const { theme, setTheme } = useTheme();
   const mapDiv = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -100,7 +98,6 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
   const [detail, setDetail] = useState<Poi | null>(null);
   const [detailFromPlan, setDetailFromPlan] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
-  const [showAccount, setShowAccount] = useState(false);
   const [trip, setTrip] = useState<TripState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSec, setMenuSec] = useState<string | null>(null);
@@ -611,15 +608,16 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
         )}
         {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
-        {isSupabaseConfigured() && userEmail && (
-          <button className="avatar" title={`Konto: ${userEmail}`} aria-label="Konto" onClick={() => setShowAccount(true)}>
+        {isSupabaseConfigured() && (userEmail ? (
+          <span className="avatar" title={`Zalogowano: ${userEmail}`} aria-label={`Zalogowano: ${userEmail}`}>
             {(userEmail.trim()[0] || "?").toUpperCase()}
             <span className="avatar-dot" />
-          </button>
-        )}
-        {isSupabaseConfigured() && !userEmail && localMode && onWantLogin && (
-          <button className="chip signin" title={t("local.sync")} onClick={onWantLogin}>👤 {t("local.signin")}</button>
-        )}
+          </span>
+        ) : (
+          <span className="avatar off" title="Niezalogowany — tryb offline" aria-label="Niezalogowany — tryb offline">
+            👤<span className="avatar-dot off" />
+          </span>
+        ))}
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Planer</button>
       </header>
@@ -794,6 +792,28 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
           <label className="mbtn"><input hidden type="file" accept=".json" onChange={(e) => { if (e.target.files?.[0]) { importFile(e.target.files[0]); setMenuOpen(false); } }} />📥 Wczytaj z pliku (.json)</label>
         </div>}
 
+        {isSupabaseConfigured() && <>
+          <button className="msecbtn" onClick={() => setMenuSec(menuSec === "account" ? null : "account")}>
+            <span>👤 Konto {userEmail ? "· zalogowany" : "· offline"}</span><span className="chev">{menuSec === "account" ? "▾" : "▸"}</span>
+          </button>
+          {menuSec === "account" && <div className="msecbody">
+            {userEmail ? <>
+              <div className="mnote">{userEmail}</div>
+              <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym kontem — pobiorą się automatycznie do pamięci offline.</div>
+              <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
+              {bioSupported && (bioEnabled
+                ? <button className="mbtn" onClick={doBioDisable}>🔒 Wyłącz logowanie biometrią</button>
+                : <button className="mbtn" onClick={doBioEnable} disabled={authBusy}>🔒 Włącz logowanie biometrią</button>)}
+              {authMsg && <div className="lok">{authMsg}</div>}
+              {authErr && <div className="lerr">⚠ {authErr}</div>}
+              <button className="mbtn" onClick={() => { setMenuOpen(false); setUserEmail(null); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
+            </> : <>
+              <div className="mhelp">Jesteś w trybie offline — apka działa w pełni bez konta na tym urządzeniu. Zaloguj się, by mieć te same trasy na komputerze i w telefonie.</div>
+              {onWantLogin && <button className="mbtn go" onClick={() => { setMenuOpen(false); onWantLogin(); }}>👤 Zaloguj / załóż konto</button>}
+            </>}
+          </div>}
+        </>}
+
         <button className="msecbtn" onClick={() => setMenuSec(menuSec === "settings" ? null : "settings")}>
           <span>⚙️ Ustawienia</span><span className="chev">{menuSec === "settings" ? "▾" : "▸"}</span>
         </button>
@@ -805,9 +825,6 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
           </div>
           <button className={"mbtn " + (lowPower ? "go" : "")} onClick={() => setLowPower((v) => !v)}>🔋 Oszczędzanie baterii: {lowPower ? "włączone" : "wyłączone"}</button>
           <div className="mhelp">Rzadszy odczyt GPS i niższa dokładność — bateria starcza znacznie dłużej na całodniowej trasie. Włącz, gdy nie potrzebujesz pozycji co sekundę.</div>
-          {isSupabaseConfigured() && !userEmail && onWantLogin && (
-            <button className="mbtn go" onClick={() => { setMenuOpen(false); onWantLogin(); }}>👤 Zaloguj / załóż konto</button>
-          )}
         </div>}
 
         <div className="msec">Pomoc</div>
@@ -825,24 +842,6 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
       {showPlan && (
         <PlannerSheet route={!!route} pois={pois} ds={ds} totalKm={totalKm} favorites={favorites} trip={trip}
           onClose={() => setShowPlan(false)} onApply={applyTrip} onOpenDetail={(p) => { setShowPlan(false); setDetailFromPlan(true); setDetail(p); }} />
-      )}
-      {showAccount && userEmail && (
-        <div className="sheet" onClick={() => setShowAccount(false)}>
-          <div className="card" onClick={(e) => e.stopPropagation()}>
-            <div className="dh"><b>👤 Konto</b><button onClick={() => setShowAccount(false)}>✕</button></div>
-            <div className="mnote" style={{ marginTop: 6 }}>{userEmail}</div>
-            <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym kontem — pobiorą się automatycznie do pamięci offline.</div>
-            <div className="lbox">
-              <button className="mbtn" onClick={() => { doSync(); }}>⟳ Synchronizuj teraz</button>
-              {bioSupported && (bioEnabled
-                ? <button className="mbtn" onClick={doBioDisable}>🔒 Wyłącz logowanie biometrią</button>
-                : <button className="mbtn" onClick={doBioEnable} disabled={authBusy}>🔒 Włącz logowanie biometrią</button>)}
-              {authMsg && <div className="lok">{authMsg}</div>}
-              {authErr && <div className="lerr">⚠ {authErr}</div>}
-              <button className="mbtn" onClick={() => { setShowAccount(false); setUserEmail(null); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
-            </div>
-          </div>
-        </div>
       )}
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
       {showAbout && <AboutSheet onClose={() => setShowAbout(false)} supportUrl={SUPPORT_URL} />}

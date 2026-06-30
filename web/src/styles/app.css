@@ -83,7 +83,10 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
   display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; line-height: 1;
   color: var(--on); background: linear-gradient(135deg, var(--dawn), #f0c27a); box-shadow: 0 1px 6px rgba(231, 161, 75, .4); }
 .avatar:active { transform: scale(.94); }
+/* wskaźnik stanu konta (nie przycisk) — zalogowany vs offline */
+.avatar.off { background: var(--surf2); color: var(--dim); box-shadow: none; font-size: 16px; }
 .avatar-dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #2fd66e; border: 2px solid var(--ink); }
+.avatar-dot.off { background: var(--dim); }
 .fetching-lbl { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--route); white-space: nowrap; }
 .rng { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .rng select { background: var(--surf); border: 1px solid var(--line); color: var(--txt); border-radius: 8px; padding: 6px 8px; }
