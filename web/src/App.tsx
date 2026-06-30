@@ -808,7 +808,7 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
         <button className="mbtn tint-indigo" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>ℹ️ O MiroBike</button>
         <button className="mbtn tint-violet" onClick={doShare}>📤 Poleć aplikację</button>
         <button className="mbtn solid-amber" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>☕ Postaw mi kawę</button>
-        <a className="mbtn tint-emerald" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt: contact@grapevest.pl</a>
+        <a className="mbtn tint-emerald" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt</a>
       </div>
 
       {detail && (
