@@ -215,24 +215,30 @@ export function HelpSheet({ onClose }: { onClose: () => void }) {
 }
 
 // ——— O aplikacji + wsparcie ———
-export function AboutSheet({ onClose, supportUrl }: { onClose: () => void; supportUrl: string }) {
+export function AboutSheet({ onClose }: { onClose: () => void }) {
   return (
     <div className="sheet" onClick={onClose}>
       <div className="card about" onClick={(e) => e.stopPropagation()}>
         <div className="dh"><b>O MiroBike</b><button onClick={onClose}>✕</button></div>
         <p className="ap">
           <b>MiroBike Ultra Planner</b> to darmowy planer dla ultra-kolarzy. Wczytujesz ślad GPX
-          wyścigu, a aplikacja pokazuje <b>noclegi, sklepy, wodę, jedzenie i paliwo</b> wzdłuż trasy —
-          z odległością, szacowanym czasem dojazdu i <b>działaniem offline</b> w terenie. Ułożysz też
-          wielodniowy plan z postojami i noclegami.
+          trasy, a aplikacja pokazuje wzdłuż niej <b>noclegi, sklepy, wodę, jedzenie i paliwo</b> —
+          z odległością, czasem dojazdu i <b>pełnym działaniem offline</b> w terenie.
         </p>
-        <p className="ap">
-          Powstała jako pomoc dla mojego <b>taty — zapalonego ultramaratończyka</b>, którego możesz
-          spotkać na trasie.
+        <p className="ap"><b>Najważniejsze funkcje:</b></p>
+        <ul className="help">
+          <li><b>Miejsca na trasie</b> z filtrami kategorii i trybem „przede mną" — co masz dalej i za ile.</li>
+          <li><b>Planer wyprawy</b> — wielodniowy plan z noclegami, posiłkami i własnymi przystankami; powiadomienia na trasie.</li>
+          <li><b>Ulubione</b> i alerty, gdy zbliżasz się do ważnego punktu.</li>
+          <li><b>Offline</b> — mapa i dane działają bez zasięgu; opcjonalne konto synchronizuje trasy między urządzeniami.</li>
+        </ul>
+        <p className="ap">Powstała jako pomoc dla mojego <b>taty — zapalonego ultramaratończyka</b>.</p>
+        <p className="ap dim">
+          MiroBike korzysta z <b>otwartych map i danych</b> (OpenStreetMap, Overture Maps). Część miejsc
+          lub linków (np. do Booking) może być nieaktualna, niepełna albo nie wyświetlać się poprawnie —
+          traktuj je orientacyjnie i w razie wątpliwości sprawdź na miejscu.
         </p>
-        <p className="ap">Jeśli pomogła Ci w ultra i chcesz podziękować — możesz postawić mi kawę. Będzie mi bardzo miło 🙏</p>
-        <a className="support-cta" href={supportUrl} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
-        <p className="ap dim">Dane: © OpenStreetMap contributors, Overture Maps Foundation. Kontakt: contact@grapevest.pl<br />wersja {__BUILD__}</p>
+        <p className="ap dim">© OpenStreetMap contributors, Overture Maps Foundation · Kontakt: contact@grapevest.pl<br />wersja {__BUILD__}</p>
       </div>
     </div>
   );

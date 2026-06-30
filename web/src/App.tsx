@@ -832,7 +832,7 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
         <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
         <button className="mbtn tint-indigo" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>ℹ️ O MiroBike</button>
         <button className="mbtn tint-violet" onClick={doShare}>📤 Poleć aplikację</button>
-        <button className="mbtn solid-amber" onClick={() => { setShowAbout(true); setMenuOpen(false); }}>☕ Postaw mi kawę</button>
+        <a className="mbtn solid-amber" href={SUPPORT_URL} target="_blank" rel="noopener">☕ Postaw mi kawę</a>
         <a className="mbtn tint-emerald" href="mailto:contact@grapevest.pl?subject=MiroBike">✉ Kontakt</a>
       </div>
 
@@ -845,7 +845,7 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
           onClose={() => setShowPlan(false)} onApply={applyTrip} onOpenDetail={(p) => { setShowPlan(false); setDetailFromPlan(true); setDetail(p); }} />
       )}
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
-      {showAbout && <AboutSheet onClose={() => setShowAbout(false)} supportUrl={SUPPORT_URL} />}
+      {showAbout && <AboutSheet onClose={() => setShowAbout(false)} />}
 
       {rideMode && (
         <div className="ride" onClick={() => setRideMode(false)}>
