@@ -6,7 +6,9 @@
    automatycznie podąża za trybem jasnym/ciemnym.
    ==================================================================== */
 
-.hp { position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden; z-index: 50;
+/* z-index ponad wszystkimi nakładkami aplikacji (.ride 1500, .menu/.sheet 1000,
+   .fetch-overlay 1400) — inaczej chrome appki przebija się nad instrukcją. */
+.hp { position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden; z-index: 2000;
   background:
     radial-gradient(120% 70% at 12% 0%, rgba(231,161,75,.10), transparent 46%),
     linear-gradient(178deg, var(--night), var(--ink) 34%, var(--dusk));
