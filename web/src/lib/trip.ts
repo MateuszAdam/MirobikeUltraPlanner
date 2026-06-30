@@ -102,18 +102,22 @@ export function planTrip(
   overrides: Record<number, Override> = {},
   extras: string[] = [],
 ): PlanDay[] {
-  const time = fatiguedTime(ds, cfg.speedKmh, cfg.dailyKm);
+  // Zabezpieczenie: puste/zerowe pola z UI nie mogą dać dzielenia przez 0
+  // (nDays = Infinity → nieskończona pętla i zawieszenie aplikacji).
+  const dailyKm = Math.max(20, cfg.dailyKm || 0);
+  const speedKmh = Math.max(5, cfg.speedKmh || 0);
+  const time = fatiguedTime(ds, speedKmh, dailyKm);
   const startMs = Date.parse(cfg.startISO) || Date.parse(new Date().toISOString());
-  const nDays = Math.max(1, Math.ceil(totalKm / cfg.dailyKm));
+  const nDays = Math.max(1, Math.ceil(totalKm / dailyKm));
   const byId = new Map(pois.map((p) => [pid(p), p]));
   const extraPois = extras.map((id) => byId.get(id)).filter((p): p is Poi => !!p);
   const days: PlanDay[] = [];
   let restSec = 0; // sumaryczny postój (sen + obiady) przed bieżącym km
 
   for (let i = 0; i < nDays; i++) {
-    const fromKm = i * cfg.dailyKm;
-    const isLast = (i + 1) * cfg.dailyKm >= totalKm;
-    const dayTargetKm = isLast ? totalKm : (i + 1) * cfg.dailyKm;
+    const fromKm = i * dailyKm;
+    const isLast = (i + 1) * dailyKm >= totalKm;
+    const dayTargetKm = isLast ? totalKm : (i + 1) * dailyKm;
     const ov = overrides[i] || {};
 
     // obiad: km, w którym zegar mija lunchHour tego dnia

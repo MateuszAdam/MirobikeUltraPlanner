@@ -25,6 +25,8 @@ import { navigate } from "./lib/nav";
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 const PMTILES_URL = import.meta.env.VITE_PMTILES_URL as string | undefined;
 
+// Po tylu ms zapisany stan jazdy uznajemy za nieaktualny i nie proponujemy wznowienia.
+const RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 const FETCH_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 
@@ -91,6 +93,8 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
 
   const [hereKm, setHereKm] = useState<number | null>(null);
   const [hereOff, setHereOff] = useState(0);
+  // Wznowienie jazdy — NIE ustawiamy pozycji automatycznie; oferujemy ją jako wybór.
+  const [resume, setResume] = useState<{ km: number; alerted?: Record<string, number[]> } | null>(null);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
   const planPidsRef = useRef<Set<string>>(new Set());
   const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
@@ -245,7 +249,7 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
     const t = setTimeout(() => {
       const alerted: Record<string, number[]> = {};
       alertedRef.current.forEach((set, id) => { alerted[id] = [...set]; });
-      setMeta(`ride:${name}`, JSON.stringify({ km: hereKm, alerted })).catch(() => {});
+      setMeta(`ride:${name}`, JSON.stringify({ km: hereKm, alerted, ts: Date.now() })).catch(() => {});
     }, 8000);
     return () => clearTimeout(t);
   }, [hereKm, name]);
@@ -315,7 +319,7 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
   function applyRoute(r: Route, nm: string, ps: Poi[], favs: Set<string>, tripArg?: TripState | null) {
     const d = downsample(r, 150);
     setRoute(r); setDs(d); setTime(buildTimeProfile(d).time);
-    setPois(ps); setGaps(computeGaps(ps)); setName(nm); setFavorites(favs); setHereKm(null);
+    setPois(ps); setGaps(computeGaps(ps)); setName(nm); setFavorites(favs); setHereKm(null); setResume(null);
     setTrip(tripArg ?? null);
     alertedRef.current.clear();
     fetchSessionRef.current = null; setMissing(0);
@@ -383,15 +387,17 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
     applyRoute(routeFromBundle(sb.bundle), n, poisFromBundle(sb.bundle), new Set(sb.favorites), sb.bundle.trip ?? null);
     setDs(downsampledFromBundle(sb.bundle));
     await setMeta("lastRoute", n);
-    // wznów stan jazdy (km + progi alertów), jeśli zapisany
+    // NIE ustawiamy pozycji automatycznie — oferujemy „Wznów jazdę" tylko gdy stan
+    // jest świeży (< 24 h). Domyślnie użytkownik włącza GPS albo dotyka mapy.
     try {
       const rs = await getMeta(`ride:${n}`);
-      if (rs) {
-        const o = JSON.parse(rs);
-        if (typeof o.km === "number") { setHereKm(o.km); setStatus(`Wznowiono: ${n} — jesteś na ${o.km.toFixed(1)} km.`); }
-        if (o.alerted) alertedRef.current = new Map(Object.entries(o.alerted).map(([id, arr]) => [id, new Set(arr as number[])]));
+      const o = rs ? JSON.parse(rs) : null;
+      const fresh = o && typeof o.km === "number" && typeof o.ts === "number" && Date.now() - o.ts < RESUME_MAX_AGE_MS;
+      if (fresh) {
+        setResume({ km: o.km, alerted: o.alerted });
+        setStatus(`Wczytano: ${n}. Wznów jazdę od ${o.km.toFixed(1)} km, włącz GPS albo dotknij mapy.`);
       } else {
-        setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc).`);
+        setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc). Włącz GPS lub dotknij mapy.`);
       }
     } catch { setStatus(`Wczytano offline: ${n} (${sb.bundle.pois.length} miejsc).`); }
   }
@@ -435,8 +441,17 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
       }
     }
   }
+  // Wznowienie jazdy — świadomy wybór użytkownika (przycisk w przewodniku).
+  function doResume() {
+    if (!resume) return;
+    if (resume.alerted) alertedRef.current = new Map(Object.entries(resume.alerted).map(([id, arr]) => [id, new Set(arr)]));
+    setHereKm(resume.km);
+    setStatus(`Wznowiono — jesteś na ${resume.km.toFixed(1)} km.`);
+    setResume(null);
+  }
   function setHere(lat: number, lon: number, fromGPS = false, accuracy = 0) {
     if (!ds || !route) { setStatus("Najpierw wczytaj trasę."); return; }
+    if (resume) setResume(null); // realna pozycja zastępuje ofertę wznowienia
     if (fromGPS) {
       if (accuracy > 80) { setStatus(`Słaby sygnał GPS (±${Math.round(accuracy)} m) — czekam na lepszy fix.`); return; }
       const s = smoothRef.current; // lekki low-pass na pozycji
@@ -751,6 +766,7 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
                     <>
                       <b>Pozycja</b><br /><small>{pois.length ? `${pois.length} miejsc wzdłuż trasy. Włącz GPS albo dotknij mapy, by zobaczyć co masz przed sobą.` : "Włącz GPS albo dotknij mapy, by zobaczyć co masz przed sobą."}</small>
                       {route && pois.length > 0 && <button className="gbtn" onClick={toggleGps}>{gpsOn ? "● GPS włączony" : "📍 Śledź GPS"}</button>}
+                      {resume && <button className="gbtn" onClick={doResume}>▶ Wznów jazdę — byłeś na {resume.km.toFixed(1)} km</button>}
                     </>
                   )}
                 </div>
