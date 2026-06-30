@@ -36,30 +36,28 @@ Bez `.env.local` apka działa **lokalnie** (offline, bez kont) — mapa używa d
 > Token sesji jest wtedy trzymany lokalnie (IndexedDB) za bramką WebAuthn urządzenia
 > i rotowany przy odświeżaniu. Wymaga HTTPS (prod) lub localhost.
 
-### 1b. Mail resetu hasła (jedyny mailowy flow) + dostarczalność
-Logowanie jest hasłem/biometrią, więc jedyny mail, jaki wysyła apka, to **reset hasła**.
-Warto go spolszczyć i poprawić nadawcę (domyślny `…@supabase.io` ląduje w spamie).
+### 1b. Markowe maile + nadawca „od Ciebie" (dostarczalność)
+Logowanie jest hasłem/biometrią, więc jedyny mail, jaki realnie wysyła apka, to **reset hasła**.
+Gotowe, ładne szablony (styl „świt", bursztyn `#e7a14b`, jak w aplikacji) leżą w
+[`supabase/email-templates/`](../supabase/email-templates/) — po jednym na każdy typ Supabase,
+z tematami i mapowaniem w `README.md` tego folderu.
 
-**A) Polski szablon** — Authentication → **Email Templates → Reset Password**:
-- **Subject:** `Zmiana hasła w MiroBike`
-- **Message (HTML):**
-```html
-<div style="font-family:system-ui,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;color:#14161b">
-  <h2 style="margin:0 0 6px">🚴 MiroBike Ultra Planner</h2>
-  <p style="font-size:15px;line-height:1.5">Kliknij przycisk, aby ustawić nowe hasło do swojego konta:</p>
-  <p style="text-align:center;margin:22px 0">
-    <a href="{{ .ConfirmationURL }}" style="background:#19e0d6;color:#04201e;font-weight:700;text-decoration:none;padding:14px 26px;border-radius:10px;display:inline-block">Ustaw nowe hasło</a>
-  </p>
-  <p style="font-size:13px;color:#667">Jeśli to nie Ty prosiłeś o zmianę hasła — zignoruj tę wiadomość.</p>
-  <p style="font-size:13px;color:#667">Rowerowych kilometrów!<br>— MiroBike · mirobike.grapevest.pl</p>
-</div>
-```
+**A) Szablony** — Authentication → **Email Templates** → wklej HTML z folderu:
+- **Reset Password** ← `reset-password.html` · Subject: `Zmiana hasła w MiroBike` *(aktywny)*
+- Confirm signup ← `confirm-signup.html` *(tylko gdy włączysz „Confirm email")*
+- Magic Link ← `magic-link.html` *(nieużywane — apka loguje hasłem)*
+- Change Email Address ← `change-email.html`
 
-**B) Ładny nadawca + dostarczalność (zalecane)** — Project Settings → Authentication → **SMTP Settings** → włącz **Custom SMTP**. Użyj darmowego dostawcy (np. **Resend** ~3000 maili/mc albo Brevo), zweryfikuj domenę `grapevest.pl` (SPF/DKIM) i ustaw:
+Każdy używa zmiennej `{{ .ConfirmationURL }}` — nic więcej nie podstawiasz.
+
+**B) Ładny nadawca + dostarczalność (zalecane)** — Project Settings → Authentication → **SMTP Settings**
+→ włącz **Custom SMTP**. Darmowy dostawca (np. **Resend** ~3000 maili/mc albo Brevo), zweryfikuj
+domenę `grapevest.pl` w DNS (**SPF + DKIM**, docelowo **DMARC**) i ustaw:
 - **Sender name:** `MiroBike`
 - **Sender email:** `noreply@grapevest.pl` (albo `konto@grapevest.pl`)
 
-Bez custom SMTP maile idą z `…@supabase.io`, częściej trafiają do spamu i są limitowane.
+Bez custom SMTP maile idą z `…@supabase.io` — częściej w spamie, limitowane i nie wyglądają jak Twoje.
+Pełna instrukcja (rekordy DNS, host/port) w `supabase/email-templates/README.md`.
 
 ### 2. Zmienne środowiskowe
 W `web/.env.local` (dev) oraz w Vercel (prod → Settings → Environment Variables):
