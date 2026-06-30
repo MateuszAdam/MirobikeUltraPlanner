@@ -204,7 +204,7 @@ export function HelpPage({ onClose }: { onClose: () => void }) {
           </div>
           <div className="hp-split">
             <div className="hpm-phone" aria-label="Makieta trybu jazdy">
-              <div className="hpm-screen ride">
+              <div className="hpm-screen hpm-ride">
                 <div className="hpm-rkm">126,4<span> km</span></div>
                 <div className="hpm-rsub">318 km do końca · ⏱ ≈ 16 h 10 min</div>
                 <div className="hpm-rcells">
@@ -236,7 +236,7 @@ export function HelpPage({ onClose }: { onClose: () => void }) {
           </div>
           <div className="hp-split">
             <div className="hpm-phone" aria-label="Makieta planera">
-              <div className="hpm-screen sheet">
+              <div className="hpm-screen hpm-sheet">
                 <div className="hpm-sh"><span>📑 Planner wyprawy</span><span className="hpm-ic">✕</span></div>
                 <div className="hpm-modes">
                   <div className="hpm-mode"><b>Maksymalny (top 10)</b><small>350 km/dzień · 25 km/h · sen 3 h</small></div>
@@ -352,7 +352,7 @@ export function HelpPage({ onClose }: { onClose: () => void }) {
           </div>
           <div className="hp-split">
             <div className="hpm-phone" aria-label="Makieta ekranu logowania">
-              <div className="hpm-screen login">
+              <div className="hpm-screen hpm-login">
                 <div className="hpm-wheel" aria-hidden="true" />
                 <div className="hpm-lbrand">Miro<b>Bike</b></div>
                 <div className="hpm-lthesis"><b>Wiedz, gdzie kupisz wodę i jedzenie</b> — zanim wjedziesz w ciemność.</div>

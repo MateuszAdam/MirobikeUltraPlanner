@@ -164,7 +164,7 @@
 .hpm-view span.on { color: #eaf0ff; box-shadow: inset 0 2px 0 #e7a14b; }
 
 /* tryb jazdy */
-.hpm-screen.ride { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 410px; text-align: center; padding: 24px 16px;
+.hpm-screen.hpm-ride { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 410px; text-align: center; padding: 24px 16px;
   background: radial-gradient(120% 80% at 50% 0%, rgba(231,161,75,.10), transparent 55%), linear-gradient(180deg, #070b16, #0a0f1e); }
 .hpm-rkm { font-family: var(--mono); font-size: 56px; font-weight: 850; line-height: .95; letter-spacing: -.03em; }
 .hpm-rkm span { font-size: 21px; color: #94a3c4; font-weight: 700; }
@@ -177,7 +177,7 @@
 .hpm-rhint { margin-top: 22px; font-size: 10.5px; color: #6b7997; }
 
 /* planer */
-.hpm-screen.sheet { padding: 14px; }
+.hpm-screen.hpm-sheet { padding: 14px; }
 .hpm-sh { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 14px; margin-bottom: 14px; }
 .hpm-modes { display: grid; gap: 7px; margin-bottom: 12px; }
 .hpm-mode { display: flex; flex-direction: column; gap: 1px; background: rgba(255,255,255,.05); border: 1px solid rgba(120,140,180,.18); border-radius: 11px; padding: 9px 11px; }
@@ -193,7 +193,7 @@
 .hpm-day .dst { font-size: 10.5px; color: #94a3c4; margin-top: 7px; padding-top: 7px; border-top: 1px dashed rgba(120,140,180,.2); }
 
 /* login mini */
-.hpm-screen.login { padding: 20px 17px; min-height: 470px; display: flex; flex-direction: column; gap: 11px;
+.hpm-screen.hpm-login { padding: 20px 17px; min-height: 470px; display: flex; flex-direction: column; gap: 11px;
   background: radial-gradient(120% 70% at 50% -4%, rgba(231,161,75,.13), transparent 55%), linear-gradient(180deg, #070b16, #0a0f1e 60%, #111a33); }
 .hpm-wheel { width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(231,161,75,.5); position: relative;
   background: repeating-conic-gradient(from 0deg, rgba(93,111,147,.7) 0 .8deg, transparent .8deg 20deg); }
