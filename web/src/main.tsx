@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import { ensurePersistence } from "./lib/db";
+import "./theme"; // ustawia data-theme zanim wyrenderuje się UI
 import Root from "./Root";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles/app.css";

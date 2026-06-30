@@ -20,6 +20,7 @@ import { DetailSheet, PlannerSheet, HelpSheet, AboutSheet } from "./components/S
 import { useGps } from "./hooks/useGps";
 import { prewarmCorridor } from "./lib/prewarm";
 import { useI18n } from "./i18n";
+import { useTheme } from "./theme";
 
 const SUPPORT_URL = "https://buycoffee.to/mateusz_adam";
 const PMTILES_URL = import.meta.env.VITE_PMTILES_URL as string | undefined;
@@ -68,6 +69,7 @@ function rideAlert(title: string, body: string) {
 
 export default function App({ localMode = false, onWantLogin }: { localMode?: boolean; onWantLogin?: () => void } = {}) {
   const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const mapDiv = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -796,6 +798,11 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
           <span>⚙️ Ustawienia</span><span className="chev">{menuSec === "settings" ? "▾" : "▸"}</span>
         </button>
         {menuSec === "settings" && <div className="msecbody">
+          <div className="mrowlab">Motyw</div>
+          <div className="seg">
+            <button className={theme === "dark" ? "on" : ""} onClick={() => setTheme("dark")}>🌙 Ciemny</button>
+            <button className={theme === "light" ? "on" : ""} onClick={() => setTheme("light")}>☀️ Jasny</button>
+          </div>
           <button className={"mbtn " + (lowPower ? "go" : "")} onClick={() => setLowPower((v) => !v)}>🔋 Oszczędzanie baterii: {lowPower ? "włączone" : "wyłączone"}</button>
           <div className="mhelp">Rzadszy odczyt GPS i niższa dokładność — bateria starcza znacznie dłużej na całodniowej trasie. Włącz, gdy nie potrzebujesz pozycji co sekundę.</div>
           {isSupabaseConfigured() && !userEmail && onWantLogin && (

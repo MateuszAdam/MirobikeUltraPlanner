@@ -187,6 +187,10 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .msecbtn { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--surf); border: 1px solid var(--line); color: var(--txt); border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; }
 .msecbtn .chev { color: var(--dim); font-size: 13px; }
 .msecbody { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 8px 10px; margin: -2px 0 2px 4px; border-left: 2px solid var(--line); }
+.mrowlab { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-family: var(--mono); }
+.seg { display: flex; gap: 4px; background: var(--surf); border: 1px solid var(--line); border-radius: 11px; padding: 4px; }
+.seg button { flex: 1; border: none; background: transparent; color: var(--dim); font-size: 14px; font-weight: 600; padding: 11px; border-radius: 8px; cursor: pointer; }
+.seg button.on { background: var(--route); color: var(--on); box-shadow: 0 4px 14px -7px var(--dawn); }
 .mbtn:disabled { opacity: .45; }
 /* kolorowe akcenty przycisków (jak w GrapeVest) */
 .mbtn.tint-sky { background: #102a3f; border-color: #1f4d6b; color: #9cd2ff; font-weight: 600; }
@@ -355,3 +359,67 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
   .list li { padding: 13px 12px; gap: 8px; }
   .card { padding: 14px 14px calc(16px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* ============================ MOTYW JASNY ============================ */
+:root[data-theme="light"] {
+  --night: #eef1f7; --dusk: #e3e9f3; --spoke: #aeb9cf;
+  --ink: #eef1f7; --ink2: #ffffff; --line: rgba(22, 32, 58, .14); --txt: #16203a; --dim: #5b667d;
+  --surf: rgba(22, 32, 58, .045); --surf2: rgba(22, 32, 58, .09); --on: #1a1206;
+  --food: #1f9d63; --sleep: #5566e6; --fuel: #cf8a00; --eat: #df4a3b; --spot: #9a4fd6;
+  --water: #1f9fd6; --bike: #67728a; --pharmacy: #dd3f7d;
+  --here: #e0a000; --fav: #e0a000; --warn: #d4543a;
+  --dawn: #d98a1f; --route: #c8801c; /* ciemniejszy bursztyn dla kontrastu linków na bieli */
+}
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(125% 80% at 12% 0%, rgba(231, 161, 75, .12), transparent 46%),
+    linear-gradient(178deg, #ffffff 0%, var(--night) 40%, var(--dusk) 100%);
+}
+:root[data-theme="light"] .bar { background: rgba(255, 255, 255, .62); box-shadow: 0 1px 0 rgba(216, 138, 31, .2); }
+:root[data-theme="light"] .toolbar,
+:root[data-theme="light"] .quick,
+:root[data-theme="light"] .filters { background: rgba(255, 255, 255, .55); }
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .menu,
+:root[data-theme="light"] .dtp-pop { background: rgba(255, 255, 255, .95); }
+:root[data-theme="light"] .card { border-top: 1px solid rgba(216, 138, 31, .25); }
+:root[data-theme="light"] .viewbar { background: rgba(255, 255, 255, .88); box-shadow: 0 8px 30px -10px rgba(22, 32, 58, .3); }
+
+/* kolorowe ramki/komunikaty — jasne warianty */
+:root[data-theme="light"] .state.ok { background: #dff5e7; color: #1c7a45; }
+:root[data-theme="light"] .state.warn { background: #fbedcf; color: #8a6212; }
+:root[data-theme="light"] .status.ok { background: #e7f6ed; color: #1c7a45; }
+:root[data-theme="light"] .status.err { background: #fdecec; color: #b53b3b; }
+:root[data-theme="light"] .warn { background: #fdecec; color: #9a3b3b; }
+:root[data-theme="light"] .warn b { color: #7a1f1f; }
+:root[data-theme="light"] .warn.fav { background: #fbf2d6; color: #8a6212; }
+:root[data-theme="light"] .warn.water { background: #e3f2fb; color: #1a5a85; }
+:root[data-theme="light"] .warn.plan { background: rgba(216, 138, 31, .14); color: #8a5512; border-color: rgba(216, 138, 31, .4); }
+:root[data-theme="light"] .modebtn.on { background: #fbf0dd; }
+:root[data-theme="light"] .mok,
+:root[data-theme="light"] .lok { background: #e7f6ed; color: #1c7a45; border-color: #b7e4c6; }
+:root[data-theme="light"] .merr { background: #fdecec; color: #b53b3b; border-color: #f0c0c0; }
+:root[data-theme="light"] .lerr { color: #b53b3b; }
+:root[data-theme="light"] .planactive { background: rgba(31, 157, 99, .1); color: #1c6e44; border-color: rgba(31, 157, 99, .3); }
+:root[data-theme="light"] .omap { background: linear-gradient(135deg, rgba(216, 138, 31, .16), rgba(93, 111, 147, .1)); border-color: rgba(216, 138, 31, .3); }
+:root[data-theme="light"] .list li .star { color: #aab2c2; }
+
+/* kolorowe przyciski menu — jasne warianty */
+:root[data-theme="light"] .mbtn.tint-sky { background: #e3f0fb; border-color: #b9d8f0; color: #1c5d8a; }
+:root[data-theme="light"] .mbtn.tint-indigo { background: #e7e8fb; border-color: #c3c6f0; color: #3a3f8a; }
+:root[data-theme="light"] .mbtn.tint-emerald { background: #e0f5ea; border-color: #b3e0c6; color: #1c7a4a; }
+:root[data-theme="light"] .mbtn.tint-violet { background: #f0e6fb; border-color: #d8c0f0; color: #6a3a9a; }
+
+/* ekran logowania — jasny wariant */
+:root[data-theme="light"] .auth {
+  --aink: #1a2233; --aink-dim: #566179; --aink-faint: #8a93a8;
+  --acard: rgba(255, 255, 255, .82); --aline: rgba(22, 32, 58, .14);
+  background:
+    radial-gradient(120% 90% at 18% 78%, rgba(231, 161, 75, .16), transparent 46%),
+    linear-gradient(178deg, #ffffff 0%, #eef2f8 36%, #e3e9f3 100%);
+}
+:root[data-theme="light"] .auth .spoke,
+:root[data-theme="light"] .auth .rim { stroke: #9aa8c4; }
+:root[data-theme="light"] .auth .lang.on,
+:root[data-theme="light"] .auth-tab[aria-selected="true"] { background: rgba(216, 138, 31, .16); }
+:root[data-theme="light"] .auth-field input { background: rgba(22, 32, 58, .04); }
