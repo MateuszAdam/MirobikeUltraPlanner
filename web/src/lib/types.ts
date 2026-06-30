@@ -51,7 +51,8 @@ export interface TripConfig {
   startISO: string;
 }
 export interface Override { sleep?: string; lunch?: string }
-export interface TripState { cfg: TripConfig; overrides: Record<number, Override> }
+/** extras: pid-y własnych przystanków dodanych przez użytkownika (woda, jedzenie, postój…). */
+export interface TripState { cfg: TripConfig; overrides: Record<number, Override>; extras?: string[] }
 
 /** Kompaktowa paczka offline — to ląduje w localStorage/IndexedDB i w Supabase. */
 export interface Bundle {

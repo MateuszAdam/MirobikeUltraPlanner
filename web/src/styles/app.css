@@ -13,6 +13,8 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; max-width: 100%; overflow-x: hidden; }
+/* tło na <html> — zasłania biały pas w obszarze safe-area / przy overscrollu na iOS */
+html { background: var(--night); }
 body {
   background:
     radial-gradient(125% 80% at 12% 0%, rgba(231, 161, 75, .09), transparent 46%),
@@ -22,7 +24,7 @@ body {
 }
 button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 
-.layout { display: grid; grid-template-rows: auto auto auto 1fr; height: 100vh; height: 100dvh; max-width: 100vw; overflow: hidden; }
+.layout { display: grid; grid-template-rows: auto auto auto auto 1fr; height: 100vh; height: 100dvh; max-width: 100vw; overflow: hidden; }
 .bar { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px; border-bottom: 1px solid var(--line); }
 .bar strong { font-size: 15px; cursor: pointer; }
 .bar .spacer { flex: 1; }
@@ -60,6 +62,11 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(231, 161, 75, .7); } 70% { box-shadow: 0 0 0 9px rgba(231, 161, 75, 0); } 100% { box-shadow: 0 0 0 0 rgba(231, 161, 75, 0); } }
 
 .quick { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--ink2); }
+/* Filtry kategorii — jeden rząd, przewijany w poziomie (nie zajmuje pół ekranu) */
+.filters { display: flex; gap: 7px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+.filters::-webkit-scrollbar { display: none; }
+.filters .chip { flex: 0 0 auto; }
 .bar, .quick { max-width: 100vw; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 9px 12px; min-height: 38px; border-radius: 999px; border: 1px solid var(--line); background: var(--surf); color: var(--txt); cursor: pointer; white-space: nowrap; }
 .chip .dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -90,6 +97,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .warn b { color: #fff; }
 .warn.fav { background: #2a2410; color: #ffe9a8; }
 .warn.water { background: #102a3f; color: #bfe6ff; }
+.warn.plan { background: rgba(231, 161, 75, .12); color: #ffdca6; border: 1px solid rgba(231, 161, 75, .3); }
 .offroute { color: var(--warn); font-weight: 700; }
 
 .profile { padding: 10px 12px 4px; }
@@ -244,7 +252,15 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .day .clock { font-family: var(--mono); font-size: 12px; color: var(--here); white-space: nowrap; }
 .daybody { padding: 0 13px 13px; display: flex; flex-direction: column; gap: 12px; }
 .stop { display: flex; flex-direction: column; gap: 6px; }
-.stoplab { font-size: 12.5px; font-weight: 600; }
+.stoplab { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.stoplab .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.stoplab small { font-weight: 400; color: var(--dim); font-family: var(--mono); }
+.planactive { font-size: 12.5px; line-height: 1.5; color: #cfe9d6; background: rgba(62, 207, 142, .08); border: 1px solid rgba(62, 207, 142, .25); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; }
+.stop.extra { background: var(--surf); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; }
+.exrow { display: flex; gap: 14px; }
+.linkbtn.warn { color: var(--warn); }
+.stop.addstop { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 11px; }
+.exhint { font-size: 11px; color: var(--dim); }
 .stop select { background: var(--surf); border: 1px solid var(--line); color: var(--txt); border-radius: 8px; padding: 10px; font-size: 13px; max-width: 100%; }
 
 .help { margin: 0; padding-left: 20px; }
@@ -302,6 +318,8 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 .chip:active { transform: scale(.96); }
 .chip.on { box-shadow: 0 5px 16px -7px var(--dawn); }
 .signin { font-weight: 700; border-color: rgba(231, 161, 75, .45); color: var(--dawn); }
+.chip.ride-btn { font-weight: 700; border-color: rgba(231, 161, 75, .45); }
+.chip.ride-btn:active { background: var(--dawn); color: var(--on); }
 
 /* Akcenty z delikatną poświatą świtu */
 .gbtn, .mbtn.go, .toolbar button.go, .lgo, .dtp-ok, .support-cta { box-shadow: 0 8px 22px -12px var(--dawn); }
@@ -324,7 +342,7 @@ button, select, input, label.btn { font-family: var(--sans); font-size: 13px; }
 
 /* wąskie telefony (np. iPhone SE = 375 px) — odchudzony nagłówek, mniejsze elementy */
 @media (max-width: 430px) {
-  .bar { gap: 7px; padding: 9px 10px; }
+  .bar { gap: 7px; padding: calc(9px + env(safe-area-inset-top, 0px)) 10px 9px; }
   .bar strong { display: none; }              /* marka chowana — liczy się stan trasy */
   .iconbtn { padding: 9px 11px; font-size: 16px; }
   .chip.plan { padding: 9px 11px; }

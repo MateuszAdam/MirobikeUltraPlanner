@@ -53,6 +53,7 @@ export interface PlanDay {
   endMs: number;
   lunch: DayStop | null;
   sleep: DayStop | null; // null w ostatnim dniu (meta)
+  stops: DayStop[];       // własne przystanki użytkownika w tym dniu (posortowane wg km)
   isLast: boolean;
 }
 
@@ -99,10 +100,13 @@ export function planTrip(
   cfg: TripConfig,
   favorites: Set<string>,
   overrides: Record<number, Override> = {},
+  extras: string[] = [],
 ): PlanDay[] {
   const time = fatiguedTime(ds, cfg.speedKmh, cfg.dailyKm);
   const startMs = Date.parse(cfg.startISO) || Date.parse(new Date().toISOString());
   const nDays = Math.max(1, Math.ceil(totalKm / cfg.dailyKm));
+  const byId = new Map(pois.map((p) => [pid(p), p]));
+  const extraPois = extras.map((id) => byId.get(id)).filter((p): p is Poi => !!p);
   const days: PlanDay[] = [];
   let restSec = 0; // sumaryczny postój (sen + obiady) przed bieżącym km
 
@@ -139,9 +143,14 @@ export function planTrip(
 
     const endKm = sleep ? sleep.km : dayTargetKm;
     const endMs = startMs + (timeAtKm(ds, time, endKm)! + restSec + lunchBreak) * 1000;
+    // własne przystanki użytkownika mieszczące się w tym dniu (czas szacunkowy)
+    const stops: DayStop[] = extraPois
+      .filter((p) => p.km >= fromKm && p.km <= (isLast ? totalKm : dayTargetKm))
+      .map((p) => ({ poi: p, km: p.km, ms: startMs + (timeAtKm(ds, time, p.km)! + restSec) * 1000 }))
+      .sort((a, b) => a.km - b.km);
     days.push({
       index: i, fromKm, toKm: endKm, distanceKm: endKm - fromKm,
-      startMs: fromClockMs, endMs, lunch, sleep, isLast,
+      startMs: fromClockMs, endMs, lunch, sleep, stops, isLast,
     });
     restSec += lunchBreak + (sleep ? cfg.sleepHours * 3600 : 0);
   }

@@ -7,6 +7,7 @@ import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS, ORDER } from "./lib/categories";
 import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
+import { planTrip } from "./lib/trip";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, setMeta, type StoredBundle } from "./lib/db";
 import { isSupabaseConfigured } from "./lib/supabase";
@@ -90,11 +91,14 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
   const [hereKm, setHereKm] = useState<number | null>(null);
   const [hereOff, setHereOff] = useState(0);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
+  const planPidsRef = useRef<Set<string>>(new Set());
   const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
   const smoothRef = useRef<{ lat: number; lon: number } | null>(null);
 
   const [detail, setDetail] = useState<Poi | null>(null);
+  const [detailFromPlan, setDetailFromPlan] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [trip, setTrip] = useState<TripState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSec, setMenuSec] = useState<string | null>(null);
@@ -394,7 +398,9 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
     if (!route) return;
     for (const p of pois) {
       const id = pid(p);
-      if (!favorites.has(id)) continue;
+      const isFav = favorites.has(id);
+      const isPlan = planPidsRef.current.has(id);
+      if (!isFav && !isPlan) continue;
       const delta = ((d) => (d < -0.05 && route.isLoop ? d + totalKm : d))(p.km - km);
       if (delta <= 0) continue;
       let set = alertedRef.current.get(id);
@@ -402,8 +408,9 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
       const th = crossedThreshold(delta, set);
       if (th != null) {
         set.add(th);
-        rideAlert(`★ ${p.name}`, `za ${delta.toFixed(1)} km (${CATS[p.cats[0]].label.toLowerCase()})`);
-        setStatus(`🔔 ★ ${p.name} — za ${delta.toFixed(1)} km`);
+        const mark = isFav ? "★" : "📋";
+        rideAlert(`${mark} ${p.name}`, `za ${delta.toFixed(1)} km (${CATS[p.cats[0]].label.toLowerCase()})`);
+        setStatus(`🔔 ${mark} ${p.name} — za ${delta.toFixed(1)} km`);
       }
     }
   }
@@ -564,6 +571,27 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
     if (hereKm == null || !route) return [];
     return ORDER.filter((c) => active.has(c)).map((c) => ({ c, n: nextOfCat(pois, c, hereKm, route.isLoop, totalKm) }));
   }, [pois, active, hereKm, route, totalKm]);
+
+  // Przystanki z planu (obiad/nocleg/własne) — „aktywny plan": podświetlenie + alerty.
+  const planPids = useMemo(() => {
+    const s = new Set<string>();
+    if (!trip || !ds || !pois.length) return s;
+    for (const d of planTrip(ds, pois, totalKm, trip.cfg, favorites, trip.overrides, trip.extras)) {
+      if (d.lunch) s.add(pid(d.lunch.poi));
+      if (d.sleep) s.add(pid(d.sleep.poi));
+      for (const st of d.stops) s.add(pid(st.poi));
+    }
+    return s;
+  }, [trip, ds, pois, totalKm, favorites]);
+  useEffect(() => { planPidsRef.current = planPids; }, [planPids]);
+  const planAhead = useMemo(() => {
+    if (hereKm == null || !route || !planPids.size) return null;
+    return pois
+      .filter((p) => planPids.has(pid(p)))
+      .map((p) => ({ p, delta: aheadDelta(p.km, hereKm, route.isLoop, totalKm) }))
+      .filter((x) => x.delta > 0.02)
+      .sort((a, b) => a.delta - b.delta)[0] ?? null;
+  }, [pois, planPids, hereKm, route, totalKm]);
   const offRoute = hereOff > 250;
 
   const guideStep = !route ? 1 : !pois.length ? 2 : 3;
@@ -582,13 +610,13 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
         {fetching && <span className="fetching-lbl"><span className="fetchdot" /> Pobiera{progress ? `… ${progress.done}/${progress.total} · ${progress.found}` : "…"}</span>}
         <span className="spacer" />
         {isSupabaseConfigured() && userEmail && (
-          <button className="avatar" title={`Zalogowano: ${userEmail}`} aria-label="Konto" onClick={() => { setMenuSec("account"); setMenuOpen(true); }}>
+          <button className="avatar" title={`Konto: ${userEmail}`} aria-label="Konto" onClick={() => setShowAccount(true)}>
             {(userEmail.trim()[0] || "?").toUpperCase()}
             <span className="avatar-dot" />
           </button>
         )}
         {isSupabaseConfigured() && !userEmail && localMode && onWantLogin && (
-          <button className="chip signin" onClick={onWantLogin}>👤 {t("local.sync")}</button>
+          <button className="chip signin" title={t("local.sync")} onClick={onWantLogin}>👤 {t("local.signin")}</button>
         )}
         <button className={"chip fav " + (favOnly ? "on" : "")} aria-label="Ulubione" title="Pokaż tylko ulubione" onClick={() => { const nv = !favOnly; setFavOnly(nv); if (nv && favorites.size === 0) setStatus("Filtr ulubionych: nic jeszcze nie oznaczono — kliknij gwiazdkę przy miejscu na liście."); }}>★</button>
         <button className="chip plan" onClick={() => setShowPlan(true)}>📑 Planer</button>
@@ -597,19 +625,22 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
       <div className="quick">
         {missing > 0 && <button className="chip refetch" disabled={fetching} onClick={() => doFetch(true)}>⬇ Dobierz brakujące ({missing})</button>}
         <button className={"chip gps " + (gpsOn ? "on" : "")} onClick={toggleGps}>{gpsOn ? "● GPS" : "📍 Śledź GPS"}</button>
+        <button className="chip ride-btn" title="Tryb jazdy — duży ekran" onClick={() => setRideMode(true)}>🚴 Jazda</button>
+        <span className="spacer" />
+        <label className="rng">w zasięgu
+          <select value={range} onChange={(e) => setRange(+e.target.value)}>
+            <option value={50}>50 km</option><option value={100}>100 km</option><option value={200}>200 km</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="filters">
         <button className={"chip " + (open24Only ? "on" : "")} title="Tylko czynne całodobowo" onClick={() => setOpen24Only((v) => !v)}>🌙 24h</button>
-        <button className={"chip " + (rideMode ? "on" : "")} title="Tryb jazdy — duży ekran" onClick={() => setRideMode(true)}>🚴 Jazda</button>
-        <button className={"chip " + (lowPower ? "on" : "")} title="Oszczędzanie baterii" onClick={() => setLowPower((v) => !v)}>🔋</button>
         {FILTER_CATS.map((c) => (
           <button key={c} className={"chip cat " + (active.has(c) ? "" : "off")} onClick={() => toggleCat(c)}>
             <span className="dot" style={{ background: CAT_COLOR[c] }} />{CATS[c].label}
           </button>
         ))}
-        <label className="rng">do
-          <select value={range} onChange={(e) => setRange(+e.target.value)}>
-            <option value={50}>50 km</option><option value={100}>100 km</option><option value={200}>200 km</option>
-          </select>
-        </label>
       </div>
 
       {(() => {
@@ -649,6 +680,7 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
               {nextWater && nextWater.delta > 25 && <div className="warn water">💧 Następna woda dopiero za <b>{nextWater.delta.toFixed(1)} km</b>. Uzupełnij wcześniej.</div>}
               {waterGapWarn && <div className="warn water">💧 Za <b>{waterGapWarn.kmTo.toFixed(1)} km</b> ostatnia woda przed odcinkiem <b>{waterGapWarn.gapKm.toFixed(0)} km bez wody</b>.</div>}
               {favAhead && <div className="warn fav">★ Do ulubionego: <b>{favAhead.p.name}</b> za <b>{favAhead.delta.toFixed(1)} km</b>{(() => { const e = etaAheadDelta(ds!, time, favAhead.delta, hereKm!, totalKm); return e != null ? ` (⏱ ${fmtDur(e)})` : ""; })()}.</div>}
+              {planAhead && <div className="warn plan">📋 Następny w planie: <b>{planAhead.p.name}</b> za <b>{planAhead.delta.toFixed(1)} km</b>{(() => { const e = etaAheadDelta(ds!, time, planAhead.delta, hereKm!, totalKm); return e != null ? ` (⏱ ${fmtDur(e)})` : ""; })()}.</div>}
               {!ahead.length ? (
                 <p className="empty">Nic w zasięgu {range} km dla wybranych filtrów.</p>
               ) : (
@@ -659,7 +691,7 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
                     return (
                       <li key={id} onClick={() => setDetail(p)}>
                         <span className="dot" style={{ background: CAT_COLOR[p.cats[0]] }} />
-                        <span className="nm">{p.name}<br /><small>{eta != null ? `⏱ ${fmtDur(eta)} · ` : ""}{fmtDist(p.detourM)} {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
+                        <span className="nm">{planPids.has(id) ? "📋 " : ""}{p.name}<br /><small>{eta != null ? `⏱ ${fmtDur(eta)} · ` : ""}{fmtDist(p.detourM)} {p.side}{is24h(p.tags) ? " · 🌙 24h" : ""}</small></span>
                         <span className="km">+{delta.toFixed(1)}</span>
                         <span className={"star " + (favorites.has(id) ? "is" : "")} onClick={(e) => { e.stopPropagation(); toggleFav(id); }}>{favorites.has(id) ? "★" : "☆"}</span>
                       </li>
@@ -760,27 +792,16 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
           <label className="mbtn"><input hidden type="file" accept=".json" onChange={(e) => { if (e.target.files?.[0]) { importFile(e.target.files[0]); setMenuOpen(false); } }} />📥 Wczytaj z pliku (.json)</label>
         </div>}
 
-        {isSupabaseConfigured() && <>
-          <button className="msecbtn" onClick={() => setMenuSec(menuSec === "account" ? null : "account")}>
-            <span>👤 Konto i e-mail {userEmail ? "✓" : ""}</span><span className="chev">{menuSec === "account" ? "▾" : "▸"}</span>
-          </button>
-          {menuSec === "account" && <div className="msecbody">
-            {userEmail ? <>
-              <div className="mnote">{userEmail}</div>
-              <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym kontem — pobiorą się automatycznie do pamięci offline.</div>
-              <button className="mbtn" onClick={doSync}>⟳ Synchronizuj teraz</button>
-              {bioSupported && (bioEnabled
-                ? <button className="mbtn" onClick={doBioDisable}>🔒 Wyłącz logowanie biometrią</button>
-                : <button className="mbtn" onClick={doBioEnable} disabled={authBusy}>🔒 Włącz logowanie biometrią</button>)}
-              {authMsg && <div className="lok">{authMsg}</div>}
-              {authErr && <div className="lerr">⚠ {authErr}</div>}
-              <button className="mbtn" onClick={() => { setUserEmail(null); setMenuSec(null); setMenuOpen(false); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
-            </> : <>
-              <div className="mhelp">Bez konta apka działa offline na tym urządzeniu. Zaloguj się lub załóż konto, by mieć te same trasy na komputerze i w telefonie.</div>
-              {onWantLogin && <button className="mbtn go" onClick={() => { setMenuOpen(false); onWantLogin(); }}>👤 Zaloguj / załóż konto</button>}
-            </>}
-          </div>}
-        </>}
+        <button className="msecbtn" onClick={() => setMenuSec(menuSec === "settings" ? null : "settings")}>
+          <span>⚙️ Ustawienia</span><span className="chev">{menuSec === "settings" ? "▾" : "▸"}</span>
+        </button>
+        {menuSec === "settings" && <div className="msecbody">
+          <button className={"mbtn " + (lowPower ? "go" : "")} onClick={() => setLowPower((v) => !v)}>🔋 Oszczędzanie baterii: {lowPower ? "włączone" : "wyłączone"}</button>
+          <div className="mhelp">Rzadszy odczyt GPS i niższa dokładność — bateria starcza znacznie dłużej na całodniowej trasie. Włącz, gdy nie potrzebujesz pozycji co sekundę.</div>
+          {isSupabaseConfigured() && !userEmail && onWantLogin && (
+            <button className="mbtn go" onClick={() => { setMenuOpen(false); onWantLogin(); }}>👤 Zaloguj / załóż konto</button>
+          )}
+        </div>}
 
         <div className="msec">Pomoc</div>
         <button className="mbtn tint-sky" onClick={() => { setShowHelp(true); setMenuOpen(false); }}>❔ Jak korzystać</button>
@@ -791,12 +812,30 @@ export default function App({ localMode = false, onWantLogin }: { localMode?: bo
       </div>
 
       {detail && (
-        <DetailSheet poi={detail} onClose={() => setDetail(null)} hereKm={hereKm} isLoop={route?.isLoop ?? false}
+        <DetailSheet poi={detail} onClose={() => { setDetail(null); if (detailFromPlan) { setDetailFromPlan(false); setShowPlan(true); } }} hereKm={hereKm} isLoop={route?.isLoop ?? false}
           ds={ds} time={time} totalKm={totalKm} favorites={favorites} onToggleFav={toggleFav} />
       )}
       {showPlan && (
         <PlannerSheet route={!!route} pois={pois} ds={ds} totalKm={totalKm} favorites={favorites} trip={trip}
-          onClose={() => setShowPlan(false)} onApply={applyTrip} onOpenDetail={(p) => { setShowPlan(false); setDetail(p); }} />
+          onClose={() => setShowPlan(false)} onApply={applyTrip} onOpenDetail={(p) => { setShowPlan(false); setDetailFromPlan(true); setDetail(p); }} />
+      )}
+      {showAccount && userEmail && (
+        <div className="sheet" onClick={() => setShowAccount(false)}>
+          <div className="card" onClick={(e) => e.stopPropagation()}>
+            <div className="dh"><b>👤 Konto</b><button onClick={() => setShowAccount(false)}>✕</button></div>
+            <div className="mnote" style={{ marginTop: 6 }}>{userEmail}</div>
+            <div className="mhelp">Trasy są w chmurze. Na innym urządzeniu zaloguj się tym samym kontem — pobiorą się automatycznie do pamięci offline.</div>
+            <div className="lbox">
+              <button className="mbtn" onClick={() => { doSync(); }}>⟳ Synchronizuj teraz</button>
+              {bioSupported && (bioEnabled
+                ? <button className="mbtn" onClick={doBioDisable}>🔒 Wyłącz logowanie biometrią</button>
+                : <button className="mbtn" onClick={doBioEnable} disabled={authBusy}>🔒 Włącz logowanie biometrią</button>)}
+              {authMsg && <div className="lok">{authMsg}</div>}
+              {authErr && <div className="lerr">⚠ {authErr}</div>}
+              <button className="mbtn" onClick={() => { setShowAccount(false); setUserEmail(null); setStatus("Wylogowano. Trasy zostają offline na tym urządzeniu."); void signOut(); }}>Wyloguj</button>
+            </div>
+          </div>
+        </div>
       )}
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
       {showAbout && <AboutSheet onClose={() => setShowAbout(false)} supportUrl={SUPPORT_URL} />}

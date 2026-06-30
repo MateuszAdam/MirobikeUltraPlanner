@@ -58,7 +58,7 @@ export function PlannerSheet(props: {
   const [cfgDraft, setCfgDraft] = useState(trip?.cfg ?? defaultCfg());
 
   const planDays = useMemo(
-    () => (trip && ds && pois.length ? planTrip(ds, pois, totalKm, trip.cfg, favorites, trip.overrides) : []),
+    () => (trip && ds && pois.length ? planTrip(ds, pois, totalKm, trip.cfg, favorites, trip.overrides, trip.extras) : []),
     [trip, ds, pois, totalKm, favorites],
   );
 
@@ -67,12 +67,21 @@ export function PlannerSheet(props: {
     setCfgDraft((c) => ({ ...c, mode: mk, speedKmh: m.speedKmh, dailyKm: m.dailyKm, sleepHours: m.sleepHours }));
   }
   function generate() {
-    onApply({ cfg: cfgDraft, overrides: trip?.overrides ?? {} });
+    onApply({ cfg: cfgDraft, overrides: trip?.overrides ?? {}, extras: trip?.extras ?? [] });
     setEditingCfg(false);
   }
   function setOverride(dayIdx: number, kind: "sleep" | "lunch", val: string) {
     if (!trip) return;
     onApply({ ...trip, overrides: { ...trip.overrides, [dayIdx]: { ...trip.overrides[dayIdx], [kind]: val || undefined } } });
+  }
+  function addExtra(p: string) {
+    if (!trip || !p) return;
+    const ex = trip.extras ?? [];
+    if (!ex.includes(p)) onApply({ ...trip, extras: [...ex, p] });
+  }
+  function removeExtra(p: string) {
+    if (!trip) return;
+    onApply({ ...trip, extras: (trip.extras ?? []).filter((x) => x !== p) });
   }
 
   return (
@@ -107,6 +116,7 @@ export function PlannerSheet(props: {
               {planDays.length} {planDays.length === 1 ? "dzień" : "dni"} · {totalKm.toFixed(0)} km · {MODES.find((m) => m.key === trip.cfg.mode)?.label} · {trip.cfg.speedKmh} km/h
               <button className="linkbtn" onClick={() => { setCfgDraft(trip.cfg); setEditingCfg(true); }}>⚙ Zmień</button>
             </div>
+            <div className="planactive">✓ Plan aktywny — obiad, nocleg i Twoje przystanki będą podświetlone na trasie i powiadomią Cię, gdy się zbliżysz.</div>
             {planDays.map((d) => {
               const nominalEnd = Math.min((d.index + 1) * trip.cfg.dailyKm, totalKm);
               const sleepCands = candidates(pois, ["sleep"], nominalEnd, 25);
@@ -140,7 +150,38 @@ export function PlannerSheet(props: {
                         </>}
                       </div>
                     )}
+                    {d.stops.map((s) => (
+                      <div className="stop extra" key={pid(s.poi)}>
+                        <div className="stoplab">
+                          <span className="dot" style={{ background: CAT_COLOR[s.poi.cats[0]] }} /> {s.poi.name}
+                          <small> · {fmtClock(s.ms)} · km {s.km.toFixed(0)} · {CATS[s.poi.cats[0]].label}</small>
+                        </div>
+                        <div className="exrow">
+                          <button className="linkbtn" onClick={() => onOpenDetail(s.poi)}>szczegóły</button>
+                          <button className="linkbtn warn" onClick={() => removeExtra(pid(s.poi))}>usuń</button>
+                        </div>
+                      </div>
+                    ))}
                     {d.isLast && <div className="stop"><div className="stoplab">🏁 Meta · {fmtClock(d.endMs)} · km {totalKm.toFixed(0)}</div></div>}
+                    {(() => {
+                      const added = new Set(trip.extras ?? []);
+                      const cands = pois
+                        .filter((p) => p.km >= d.fromKm && p.km <= d.toKm && p.cats[0] !== "sleep" && !added.has(pid(p)))
+                        .sort((a, b) => (favorites.has(pid(b)) ? 1 : 0) - (favorites.has(pid(a)) ? 1 : 0) || a.km - b.km)
+                        .slice(0, 50);
+                      return (
+                        <div className="stop addstop">
+                          <div className="stoplab">➕ Dodaj przystanek (woda, jedzenie, postój…)</div>
+                          <select value="" onChange={(e) => { if (e.target.value) { addExtra(e.target.value); e.currentTarget.value = ""; } }}>
+                            <option value="">— wybierz miejsce w zasięgu dnia —</option>
+                            {cands.map((p) => (
+                              <option key={pid(p)} value={pid(p)}>{(favorites.has(pid(p)) ? "★ " : "") + p.name} · km {p.km.toFixed(0)} · {CATS[p.cats[0]].label}</option>
+                            ))}
+                          </select>
+                          <div className="exhint">★ = Twoje ulubione (na górze listy).</div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </details>
               );
