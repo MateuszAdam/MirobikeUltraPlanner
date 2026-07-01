@@ -6,7 +6,7 @@ import { downsample, project, pid, aheadDelta } from "./lib/geo";
 import { fetchPois, type FetchSession } from "./lib/overpass";
 import { buildTimeProfile, timeAtKm, etaAheadDelta, fmtDur } from "./lib/eta";
 import { CATS, ORDER } from "./lib/categories";
-import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThreshold, kmMarkerFeatures } from "./lib/planner";
+import { aheadList, nextShop, nextOfCat, gapBeforeStretch, gapsByCat, crossedThreshold, kmMarkerFeatures, FAV_THRESHOLDS } from "./lib/planner";
 import { planTrip } from "./lib/trip";
 import { buildBundle, computeGaps, routeFromBundle, poisFromBundle, downsampledFromBundle } from "./lib/bundle";
 import { db, listBundles, putBundle, deleteBundle, ensurePersistence, getMeta, setMeta, type StoredBundle } from "./lib/db";
@@ -27,6 +27,8 @@ const PMTILES_URL = import.meta.env.VITE_PMTILES_URL as string | undefined;
 
 // Po tylu ms zapisany stan jazdy uznajemy za nieaktualny i nie proponujemy wznowienia.
 const RESUME_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// Powyżej tego dystansu od trasy fix GPS nie jest „pozycją na trasie" — nie udajemy km.
+const MAX_ON_ROUTE_M = 3000;
 const FILTER_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 const FETCH_CATS: CatKey[] = ["food", "sleep", "fuel", "eat", "water", "bike", "pharmacy"];
 
@@ -95,7 +97,10 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
   const [hereOff, setHereOff] = useState(0);
   // Wznowienie jazdy — NIE ustawiamy pozycji automatycznie; oferujemy ją jako wybór.
   const [resume, setResume] = useState<{ km: number; alerted?: Record<string, number[]> } | null>(null);
+  // preview = pozycja domyślna (od km 0), nie realny fix/tapnięcie — inna etykieta w panelu.
+  const [preview, setPreview] = useState(false);
   const alertedRef = useRef<Map<string, Set<number>>>(new Map());
+  const baselinedRef = useRef(false); // czy zrobiono „zerowanie" progów alertów przy 1. fixie
   const planPidsRef = useRef<Set<string>>(new Set());
   const hereLLRef = useRef<{ lat: number; lon: number } | null>(null);
   const smoothRef = useRef<{ lat: number; lon: number } | null>(null);
@@ -243,9 +248,19 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route]);
 
+  // Domyślny podgląd „od startu" (km 0), gdy mapa jest wczytana, a nie ma jeszcze
+  // pozycji (GPS/tapnięcie) ani oferty wznowienia. Dzięki temu widać listę „przede
+  // mną" od km 0 zamiast pustego przewodnika — bez udawania, że jesteś na trasie.
+  useEffect(() => {
+    if (route && ds && pois.length && hereKm == null && !resume) {
+      setHereKm(0); setHereOff(0); setPreview(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, ds, pois.length, hereKm, resume]);
+
   // Lekki zrzut stanu jazdy (km + progi alertów) do IndexedDB — przetrwa reload na trasie.
   useEffect(() => {
-    if (hereKm == null || !name) return;
+    if (hereKm == null || !name || preview) return;
     const t = setTimeout(() => {
       const alerted: Record<string, number[]> = {};
       alertedRef.current.forEach((set, id) => { alerted[id] = [...set]; });
@@ -319,9 +334,10 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
   function applyRoute(r: Route, nm: string, ps: Poi[], favs: Set<string>, tripArg?: TripState | null) {
     const d = downsample(r, 150);
     setRoute(r); setDs(d); setTime(buildTimeProfile(d).time);
-    setPois(ps); setGaps(computeGaps(ps)); setName(nm); setFavorites(favs); setHereKm(null); setResume(null);
+    setPois(ps); setGaps(computeGaps(ps)); setName(nm); setFavorites(favs); setHereKm(null); setResume(null); setPreview(false);
     setTrip(tripArg ?? null);
     alertedRef.current.clear();
+    baselinedRef.current = false;
     fetchSessionRef.current = null; setMissing(0);
   }
   function loadRoute(r: Route, nm: string) {
@@ -423,29 +439,46 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
 
   function checkFavAlerts(km: number) {
     if (!route) return;
-    for (const p of pois) {
-      const id = pid(p);
-      const isFav = favorites.has(id);
-      const isPlan = planPidsRef.current.has(id);
-      if (!isFav && !isPlan) continue;
-      const delta = ((d) => (d < -0.05 && route.isLoop ? d + totalKm : d))(p.km - km);
-      if (delta <= 0) continue;
-      let set = alertedRef.current.get(id);
-      if (!set) { set = new Set(); alertedRef.current.set(id, set); }
-      const th = crossedThreshold(delta, set);
-      if (th != null) {
-        set.add(th);
-        const mark = isFav ? "★" : "📋";
-        rideAlert(`${mark} ${p.name}`, `za ${delta.toFixed(1)} km (${CATS[p.cats[0]].label.toLowerCase()})`);
-        setStatus(`🔔 ${mark} ${p.name} — za ${delta.toFixed(1)} km`);
+    // nadchodzące ulubione / punkty planu, od najbliższego
+    const upcoming = pois
+      .filter((p) => { const id = pid(p); return favorites.has(id) || planPidsRef.current.has(id); })
+      .map((p) => ({ p, delta: aheadDelta(p.km, km, route.isLoop, totalKm) }))
+      .filter((x) => x.delta > 0.02)
+      .sort((a, b) => a.delta - b.delta);
+
+    // Pierwszy fix: tylko „wyzeruj" progi (oznacz już minięte), NIC nie pokazuj —
+    // inaczej po włączeniu GPS dostajesz serię powiadomień o wszystkich ulubionych.
+    if (!baselinedRef.current) {
+      baselinedRef.current = true;
+      for (const { p, delta } of upcoming) {
+        const id = pid(p);
+        let set = alertedRef.current.get(id);
+        if (!set) { set = new Set(); alertedRef.current.set(id, set); }
+        for (const th of FAV_THRESHOLDS) if (delta <= th) set.add(th);
       }
+      return;
+    }
+
+    // Dalej: powiadamiamy TYLKO o jednym, najbliższym nadchodzącym punkcie.
+    const near = upcoming[0];
+    if (!near) return;
+    const id = pid(near.p);
+    let set = alertedRef.current.get(id);
+    if (!set) { set = new Set(); alertedRef.current.set(id, set); }
+    const th = crossedThreshold(near.delta, set);
+    if (th != null) {
+      set.add(th);
+      const mark = favorites.has(id) ? "★" : "📋";
+      rideAlert(`${mark} ${near.p.name}`, `za ${near.delta.toFixed(1)} km (${CATS[near.p.cats[0]].label.toLowerCase()})`);
+      setStatus(`🔔 ${mark} ${near.p.name} — za ${near.delta.toFixed(1)} km`);
     }
   }
   // Wznowienie jazdy — świadomy wybór użytkownika (przycisk w przewodniku).
   function doResume() {
     if (!resume) return;
     if (resume.alerted) alertedRef.current = new Map(Object.entries(resume.alerted).map(([id, arr]) => [id, new Set(arr)]));
-    setHereKm(resume.km);
+    baselinedRef.current = true; // progi wznowione z zapisu — nie zerować przy 1. fixie
+    setHereKm(resume.km); setPreview(false);
     setStatus(`Wznowiono — jesteś na ${resume.km.toFixed(1)} km.`);
     setResume(null);
   }
@@ -460,21 +493,35 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
     } else {
       smoothRef.current = null; // tapnięcie w mapę = świadomy skok, bez wygładzania
     }
-    // okno ±4 km wokół ostatniego km (anty-„teleport" na pętli); pierwszy fix = globalnie
-    const win = fromGPS && hereKm != null ? { km: hereKm, winKm: 4 } : undefined;
+    // „Żywa" pozycja = realny fix/tapnięcie (nie podgląd od km 0). Tylko wtedy
+    // stosujemy okno ±4 km wokół ostatniego km (anty-„teleport" na pętli).
+    const hasLivePos = hereKm != null && !preview;
+    const win = fromGPS && hasLivePos ? { km: hereKm!, winKm: 4 } : undefined;
     const pr = project(ds, lat, lon, win);
-    let km = pr.km;
-    if (fromGPS && hereKm != null && !route.isLoop) {
-      const back = hereKm - km;
-      if (back > 0 && back < 0.5) km = hereKm; // drobny jitter nie cofa licznika
-    }
-    setHereKm(km); setHereOff(pr.detourM);
+
+    // zawsze pokaż marker pozycji + krąg dokładności
     hereLLRef.current = { lat, lon };
     const m = map.current;
     (m?.getSource("mb_here") as maplibregl.GeoJSONSource | undefined)?.setData({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lon, lat] } });
     (m?.getSource("mb_acc") as maplibregl.GeoJSONSource | undefined)?.setData(
       accuracy > 0 ? circlePolygon(lat, lon, accuracy) : { type: "FeatureCollection", features: [] },
     );
+
+    // GPS daleko od trasy (np. z domu) → nie udawaj kilometra na trasie.
+    // Pokaż podgląd od startu + informację, ile dzieli Cię od trasy.
+    if (fromGPS && pr.detourM > MAX_ON_ROUTE_M) {
+      setHereKm(0); setHereOff(pr.detourM); setPreview(true);
+      setStatus(`Jesteś ${fmtDist(pr.detourM)} od trasy — podgląd od startu (km 0). Dotknij punktu na trasie, by sprawdzić inny.`);
+      return; // bez centrowania na dalekiej pozycji i bez alertów
+    }
+
+    let km = pr.km;
+    if (fromGPS && hasLivePos && !route.isLoop) {
+      const back = hereKm! - km;
+      if (back > 0 && back < 0.5) km = hereKm!; // drobny jitter nie cofa licznika
+    }
+    setHereKm(km); setHereOff(pr.detourM); setPreview(false);
+
     // kamera: pierwszy fix / zoom-out → przybliż na mnie; potem płynnie podążaj
     if (m) {
       if (m.getZoom() < 13) m.flyTo({ center: [lon, lat], zoom: 14, duration: 600 });
@@ -686,15 +733,18 @@ export default function App({ onWantLogin }: { localMode?: boolean; onWantLogin?
           {hereKm != null && route ? (
             <>
               <div className="here">
-                <div className="lab">{offRoute ? "najbliżej trasy" : "jesteś na"}</div>
+                <div className="lab">{preview ? "podgląd od startu" : offRoute ? "najbliżej trasy" : "jesteś na"}</div>
                 <div className="km">{hereKm.toFixed(1)}<small> / {totalKm.toFixed(0)} km</small></div>
                 <div className="meta">
                   {(totalKm - hereKm).toFixed(1)} km do końca
                   {time.length ? ` · ⏱ ≈ ${fmtDur(timeAtKm(ds!, time, totalKm)! - timeAtKm(ds!, time, hereKm)!)}` : ""}
-                  {!offRoute && ` · ${fmtDist(hereOff)} od trasy`}
+                  {!offRoute && !preview && ` · ${fmtDist(hereOff)} od trasy`}
                 </div>
               </div>
-              {offRoute && <div className="warn">⚠️ Jesteś <b>{fmtDist(hereOff)}</b> od trasy — wygląda, że jesteś poza nią. Pokazany km to najbliższy punkt trasy.</div>}
+              {preview && (
+                <div className="warn">🧭 {hereOff > MAX_ON_ROUTE_M ? <>Jesteś <b>{fmtDist(hereOff)}</b> od trasy. </> : ""}Podgląd od startu — włącz <b>📍 GPS</b> albo dotknij punktu na mapie, by liczyć od swojej pozycji.</div>
+              )}
+              {!preview && offRoute && <div className="warn">⚠️ Jesteś <b>{fmtDist(hereOff)}</b> od trasy — wygląda, że jesteś poza nią. Pokazany km to najbliższy punkt trasy.</div>}
               {nextByCat.length > 0 && (
                 <div className="nextrow">
                   {nextByCat.map(({ c, n }) => (
