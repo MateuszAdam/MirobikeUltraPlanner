@@ -59,6 +59,30 @@ domenę `grapevest.pl` w DNS (**SPF + DKIM**, docelowo **DMARC**) i ustaw:
 Bez custom SMTP maile idą z `…@supabase.io` — częściej w spamie, limitowane i nie wyglądają jak Twoje.
 Pełna instrukcja (rekordy DNS, host/port) w `supabase/email-templates/README.md`.
 
+### 1c. Logowanie: PWA (ekran początkowy) vs karta w Safari — iOS
+**Na iPhonie zainstalowana PWA i Safari mają OSOBNE magazyny danych** (Apple je izoluje).
+Skutki, o których trzeba wiedzieć:
+- **Sesji NIE da się automatycznie współdzielić** między Safari a apką z ekranu początkowego —
+  to ograniczenie systemu, nie błąd. „Zaloguj w przeglądarce → zalogowany w apce” samo z siebie
+  nie zadziała na iOS (na Androidzie bywa różnie).
+- **Linki z maila (reset hasła) zawsze otwierają się w Safari**, nie w PWA. Nie da się przekierować
+  linku do zainstalowanej PWA na iOS.
+
+**Dlatego apka jest zaprojektowana tak, by to nie bolało:**
+1. **Logowanie hasłem** (nie magic-link) — logujesz się w tym kontekście, w którym jesteś. W apce →
+   masz sesję w apce, bez żadnego linku. **Zostaw „Confirm email” = OFF** (pkt 3 wyżej), inaczej
+   rejestracja wymusza link z maila (Safari) i PWA zostaje niezalogowana.
+2. **Biometria** (Face ID / Touch ID) — po pierwszym logowaniu hasłem w danym kontekście kolejne to
+   jedno dotknięcie. Ustawiasz osobno w apce i w Safari, ale potem nie wpisujesz już hasła.
+3. **Trasy są w chmurze** — po zalogowaniu (w każdym kontekście, tym samym kontem) oba widzą te same
+   dane. Czyli „to samo wszędzie” działa na poziomie danych, nawet jeśli sesja jest per-kontekst.
+
+**Reset hasła w praktyce:** klikasz link → otwiera się Safari → ustawiasz nowe hasło (jesteś zalogowany
+w Safari) → otwierasz apkę z ekranu początkowego i logujesz się nowym hasłem (raz — potem Face ID).
+
+> **URL Configuration (wymagane, by reset działał):** Site URL + Redirect URLs muszą zawierać
+> `https://www.mirobike.grapevest.pl` (+ `http://localhost:5173` na dev).
+
 ### 2. Zmienne środowiskowe
 W `web/.env.local` (dev) oraz w Vercel (prod → Settings → Environment Variables):
 ```
